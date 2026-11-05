@@ -1,5 +1,5 @@
 // Claude Panel — Electron ana süreç
-const { app, BrowserWindow, ipcMain, dialog, shell, nativeTheme, Menu, protocol, nativeImage } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, shell, nativeTheme, Menu, protocol, nativeImage, WebContentsView, session } = require('electron');
 app.setName('Claude Panel');
 // Sohbetteki video/ses oynatıcıları yerel dosyaları cpmedia://local/<kodlanmış-yol> ile okur (ileri/geri sarma için Range desteği)
 protocol.registerSchemesAsPrivileged([{ scheme: 'cpmedia', privileges: { standard: true, secure: true, stream: true, supportFetchAPI: true } }]);
@@ -63,6 +63,9 @@ function syncSearch() {
     .catch(e => console.warn('arama dizini', e.message));
 }
 const runner = new Runner((ch, payload) => { if (win && !win.isDestroyed()) win.webContents.send(ch, payload); });
+// Tarayıcı paneli (önizleme): ayrı oturumlu WebContentsView, ayrıntılar browser.js'te
+const browser = require('./browser').createBrowser({ getWin: () => win, WebContentsView, session, shell,
+  send: (ch, p) => { if (win && !win.isDestroyed()) win.webContents.send(ch, p); } });
 
 function createWindow() {
   win = new BrowserWindow({
@@ -96,6 +99,8 @@ function createWindow() {
   win.webContents.setWindowOpenHandler(({ url }) => { if (/^https?:/.test(url)) shell.openExternal(url); return { action: 'deny' }; });
   win.webContents.on('will-navigate', (e, url) => { if (!url.startsWith('file:')) { e.preventDefault(); if (/^https?:/.test(url)) shell.openExternal(url); } });
   win.on('focus', () => { try { win.flashFrame(false); } catch {} });
+  win.on('closed', () => browser.destroy());
+  win.webContents.on('did-finish-load', () => browser.hide()); // arayüz yeniden yüklendi: panel kapalı başlar
   if (SELFTEST) runSelftest();
 }
 
@@ -240,6 +245,20 @@ ipcMain.handle('app:dictate', () => new Promise(resolve => {
   const c = dictateCommand(process.platform); if (!c) return resolve({ ok: false, platform: process.platform });
   require('child_process').execFile(c.cmd, c.args, { windowsHide: true, timeout: 15000 }, err => resolve({ ok: !err, error: err ? String(err.message).slice(0, 200) : null }));
 }));
+ipcMain.handle('browser:navigate', (_e, input) => browser.navigate(input));
+ipcMain.handle('browser:cmd', (_e, name) => browser.command(name));
+ipcMain.handle('browser:state', () => browser.state());
+ipcMain.on('browser:bounds', (_e, r) => { browser.setBounds(r); });
+if (SELFTEST) { // yalnızca selftest: yerel deneme sayfası ve görünümün ekran görüntüsü
+  const srv = require('./browser').startTestServer();
+  ipcMain.handle('browser:testUrl', () => srv.then(x => x.url));
+  ipcMain.handle('browser:testShot', async () => {
+    const v = browser.view; if (!v) return null;
+    const f = path.join(process.env.SELFTEST_OUT || os.tmpdir(), 'selftest-tarayici.png');
+    try { fs.writeFileSync(f, (await v.webContents.capturePage(undefined, { stayHidden: true })).toPNG()); return f; }
+    catch (err) { return 'çekilemedi: ' + err.message; } // gizli pencerede görünüm çizilmeyebilir
+  });
+}
 ipcMain.handle('app:info', () => ({ projectsDir: PROJECTS_DIR, workspaceFile: workspace.FILE, version: app.getVersion(), selftest: SELFTEST }));
 
 // ---------- Canlı izleme ----------
@@ -307,7 +326,7 @@ function buildMenu() {
     { label: 'Dosya', submenu: [item('Yeni Sohbet', 'CmdOrCtrl+N', 'newChat'), item('Yeni Klasör', 'Shift+CmdOrCtrl+N', 'newFolder'), { type: 'separator' }, item('Ara', 'CmdOrCtrl+K', 'search'), item('Şimdi Senkronla', 'CmdOrCtrl+R', 'sync'), { type: 'separator' }, item('Proje Klasörünü Aç', 'Shift+CmdOrCtrl+O', 'reveal')]
       .concat(IS_MAC ? [] : [{ type: 'separator' }, { role: 'quit', label: 'Çık', accelerator: 'Alt+F4' }]) },
     { label: 'Düzen', submenu: [{ role: 'undo', label: 'Geri Al' }, { role: 'redo', label: 'Yinele' }, { type: 'separator' }, { role: 'cut', label: 'Kes' }, { role: 'copy', label: 'Kopyala' }, { role: 'paste', label: 'Yapıştır' }, item('Tümünü Seç', 'CmdOrCtrl+A', 'selectAll')] },
-    { label: 'Görünüm', submenu: [item('Sohbetler Penceresi', 'CmdOrCtrl+B', 'org'), item('GourceView', 'CmdOrCtrl+G', 'graph'), item('Bilgi Paneli', 'CmdOrCtrl+I', 'info'), { type: 'separator' },
+    { label: 'Görünüm', submenu: [item('Sohbetler Penceresi', 'CmdOrCtrl+B', 'org'), item('GourceView', 'CmdOrCtrl+G', 'graph'), item('Bilgi Paneli', 'CmdOrCtrl+I', 'info'), item('Tarayıcı Paneli', 'Shift+CmdOrCtrl+P', 'browser'), { type: 'separator' },
       item('Tek Bölme', 'Alt+CmdOrCtrl+1', 'layout', 1), item('İki Sütun', 'Alt+CmdOrCtrl+2', 'layout', 2), item('Üç Sütun', 'Alt+CmdOrCtrl+3', 'layout', 3), item('2×2', 'Alt+CmdOrCtrl+4', 'layout', 4), { type: 'separator' },
       item('Açık / Koyu Tema', 'Shift+CmdOrCtrl+L', 'theme'), { role: 'togglefullscreen', label: 'Tam Ekran' }, { type: 'separator' }, { role: 'reload', label: 'Arayüzü Yeniden Yükle', accelerator: 'Shift+CmdOrCtrl+R' }, ...(app.isPackaged ? [] : [{ role: 'toggleDevTools', label: 'Geliştirici Araçları' }])] },
     { label: 'Bölme', submenu: [1, 2, 3, 4].map(n => item(`Bölme ${n}`, `CmdOrCtrl+${n}`, 'pane', n - 1)).concat([{ type: 'separator' },

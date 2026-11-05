@@ -2324,7 +2324,7 @@ boot().catch(e => { console.error('Açılış hatası', e); window.__errors.push
 
 /* ---------- Faz 4: menü komutları ve kısayol yardımı ---------- */
 const SHORTCUTS = [
-  ['Genel', [['⌘N','Yeni sohbet (klasör seçerek)'],['⇧⌘N','Yeni klasör'],['⌘K','Tüm sohbetlerde ara'],['⌘B','Sohbetler penceresi'],['⌘G','GourceView'],['⌘I','Bilgi paneli'],['⌘R','Şimdi senkronla'],['⇧⌘L','Açık / koyu tema'],['⌘/','Bu yardım']]],
+  ['Genel', [['⌘N','Yeni sohbet (klasör seçerek)'],['⇧⌘N','Yeni klasör'],['⌘K','Tüm sohbetlerde ara'],['⌘B','Sohbetler penceresi'],['⌘G','GourceView'],['⌘I','Bilgi paneli'],['⇧⌘P','Tarayıcı paneli (önizleme)'],['⌘R','Şimdi senkronla'],['⇧⌘L','Açık / koyu tema'],['⌘/','Bu yardım']]],
   ['Bölmeler', [['⌘1–4','Bölmeye geç (aramada: o bölmede aç)'],['⇧⌘[ ⇧⌘]','Önceki / sonraki bölme'],['⌥⌘1–4','Düzen: 1 / 2 / 3 / 2×2'],['⌥⌘W','Bölmeyi kapat'],['↵ / ⇧↵','Gönder / yeni satır'],['Esc','Çalışan turu durdur'],['⌘↵','Bekleyen izni onayla']]],
   ['Sohbetler penceresi', [['Çift tık · ↵','Aç / klasöre gir'],['⌫ · ⌘↑','Üst klasör'],['⌘[ ⌘]','Geri / ileri'],['Boşluk','Önizle'],['F2','Yeniden adlandır'],['⌘X ⌘V','Kes / yapıştır (taşı)'],['⌘⌫','Çöp Kutusuna taşı'],['⌃⌘N','Seçilenlerle yeni klasör'],['⌘A · ok tuşları','Seç / gez']]],
   ['GourceView', [['L','Bağlantı kur'],['F','Sığdır'],['⇧ + sürükle','İki düğümü bağla'],['Tekerlek','Yakınlaştır']]],

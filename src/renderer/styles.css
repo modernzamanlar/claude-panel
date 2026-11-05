@@ -777,3 +777,22 @@ img.dog8{image-rendering:pixelated;image-rendering:crisp-edges;display:block}
 .pane.compact .pill{padding:3px 6px}
 .pane.compact .pill[data-effort] span{display:none}
 .ibtn.mic{margin-left:2px}
+
+/* Tarayıcı paneli (önizleme): bilgi panelinin yerinde; sayfa ana süreçteki görünümde, .bp-view yalnızca yer tutucu */
+.bp{grid-column:3;grid-row:2;width:clamp(380px,42vw,960px);min-height:0;display:flex;flex-direction:column;border-left:1px solid var(--line);background:var(--side)}
+.bp[hidden]{display:none}
+.app.bp-on .info{display:none}
+.bp-bar{display:flex;align-items:center;gap:2px;padding:6px 8px;border-bottom:1px solid var(--line)}
+.bp-bar .ibtn{width:28px;height:28px;flex:none}
+.bp-bar .ibtn:disabled{opacity:.35;cursor:default;background:none}
+.bp-url{flex:1;min-width:0;margin:0 4px;padding:5px 10px;border-radius:8px;border:1px solid var(--line);background:var(--panel);font:12.5px var(--mono);outline:none}
+.bp-url:focus{border-color:var(--line2);box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 18%,transparent)}
+.bp-load{height:2px;flex:none}
+.bp.loading .bp-load{background:linear-gradient(90deg,transparent,var(--accent),transparent);background-size:40% 100%;background-repeat:no-repeat;animation:bpload 1s linear infinite}
+@keyframes bpload{from{background-position:-40% 0}to{background-position:140% 0}}
+.bp-view{flex:1;min-height:0;position:relative;background:var(--bg)}
+.bp-msg{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;padding:24px;text-align:center;color:var(--muted);font-size:13px}
+.bp-msg[hidden]{display:none}
+.bp-msg b{color:var(--text);font-size:14px}
+.bp-msg .mono{font-family:var(--mono);font-size:12px;word-break:break-all}
+.app.bp-on ~ .toast{left:calc(28px + (100vw - 56px - var(--bpw,0px)) / 2)}

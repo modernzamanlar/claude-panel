@@ -63,6 +63,16 @@ contextBridge.exposeInMainWorld('api', {
     query: q => ipcRenderer.invoke('search:query', q),
     onProgress: cb => { const h = (_e, p) => cb(p); ipcRenderer.on('search:progress', h); return () => ipcRenderer.removeListener('search:progress', h); },
   },
+  browser: {
+    navigate: input => ipcRenderer.invoke('browser:navigate', input),
+    cmd: name => ipcRenderer.invoke('browser:cmd', name),
+    state: () => ipcRenderer.invoke('browser:state'),
+    bounds: r => ipcRenderer.send('browser:bounds', r),
+    onState: cb => { const h = (_e, st) => cb(st); ipcRenderer.on('browser:state', h); return () => ipcRenderer.removeListener('browser:state', h); },
+    onBlocked: cb => { const h = (_e, x) => cb(x); ipcRenderer.on('browser:blocked', h); return () => ipcRenderer.removeListener('browser:blocked', h); },
+    testUrl: () => ipcRenderer.invoke('browser:testUrl'),
+    testShot: () => ipcRenderer.invoke('browser:testShot'),
+  },
   onMenu: cb => { const h = (_e, p) => cb(p); ipcRenderer.on('menu', h); return () => ipcRenderer.removeListener('menu', h); },
   info: () => ipcRenderer.invoke('app:info'),
   app: {
