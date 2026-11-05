@@ -777,3 +777,19 @@ img.dog8{image-rendering:pixelated;image-rendering:crisp-edges;display:block}
 .pane.compact .pill{padding:3px 6px}
 .pane.compact .pill[data-effort] span{display:none}
 .ibtn.mic{margin-left:2px}
+
+/* Dosya farkı (diff.js): düzenleme araçlarında başlıkta +N −M, açılınca kırmızı/yeşil satırlar */
+.tool-h .dv-n{display:flex;gap:6px;font:500 11px var(--mono);flex:none}
+.dv-pa{color:var(--ok)}
+.dv-pd{color:#d0453a}
+.tool-b.dv-b{padding:4px 0;white-space:normal;overflow:auto;max-height:420px}
+.dv{font:11.5px/1.55 var(--mono);color:var(--text);min-width:max-content}
+.dv-l{display:flex;white-space:pre;padding-right:10px}
+.dv-s{flex:none;width:22px;text-align:center;user-select:none;color:var(--faint)}
+.dv-c .dv-t{color:var(--muted)}
+.dv-a{background:color-mix(in srgb,var(--ok) 16%,transparent)}
+.dv-a .dv-s{color:var(--ok)}
+.dv-d{background:color-mix(in srgb,#d0453a 14%,transparent)}
+.dv-d .dv-s{color:#d0453a}
+.dv-gap{color:var(--faint);padding:0 10px 0 22px;user-select:none}
+.dv-o{white-space:pre-wrap;color:var(--muted);padding:6px 10px 2px;border-top:1px solid var(--line);margin-top:4px;min-width:0}

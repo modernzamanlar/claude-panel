@@ -772,7 +772,8 @@ document.addEventListener('contextmenu', e => {
     <button data-m="fpshow" data-p="${esc(p)}">${ic('folder')}Klasörde göster</button>
     <button data-m="fpcopy" data-p="${esc(p)}">${ic('clip')}Yolu kopyala</button>`);
 }, true);
-const toolHTML = b => `<div class="tool ${b.err?'terr':''}"><div class="tool-h">${b.running?'<span class="spin"></span>':ic('chev','chev')}${ic(b.n==='Bash'?'term':b.n==='Read'?'file':/Write|Edit/.test(b.n)?'edit':'sliders')}<b>${esc(b.n)}</b><span class="mono">${esc(b.a)}</span>${thumbs(b.imgs, 'th-in')}</div><div class="tool-b">${esc(b.o)}</div></div>`;
+// Düzenleme araçlarında (b.d) başlıkta +N −M, açılınca renkli fark (diff.js); hata olursa araç çıktısı da altında
+const toolHTML = b => { const dv = diffView.html(b.d); return `<div class="tool ${b.err?'terr':''}"><div class="tool-h">${b.running?'<span class="spin"></span>':ic('chev','chev')}${ic(b.n==='Bash'?'term':b.n==='Read'?'file':/Write|Edit/.test(b.n)?'edit':'sliders')}<b>${esc(b.n)}</b><span class="mono">${esc(b.a)}</span>${dv ? dv.badge : ''}${thumbs(b.imgs, 'th-in')}</div><div class="tool-b${dv ? ' dv-b' : ''}">${dv ? dv.html + (b.err && b.o ? `<div class="dv-o">${esc(b.o)}</div>` : '') : esc(b.o)}</div></div>`; };
 // Art arda gelen araç çağrıları tek satırda toplanır ("7 araç · browser_batch ×6, Bash"); tıklayınca açılır. Açık olanlar yeniden çizimde açık kalır.
 const TGOPEN = new Set();
 const toolShort = n => n.replace(/^.*·\s*/, '');
@@ -2019,7 +2020,7 @@ function onRun(p){
     if(ev.type === 'assistant' && ev.message){
       for(const c of ev.message.content || []){
         if(c.type === 'text' && c.text && c.text.trim()){ L.b.push({t:'text', v:md(c.text)}); L.draft = ''; }
-        else if(c.type === 'tool_use'){ const tool = {t:'tool', n:shortTool(c.name), a:toolSum(c.input), o:'', running:true, ...(turnCard(c.name, c.input) || {})}; L.b.push(tool); R.tools.set(c.id, tool);
+        else if(c.type === 'tool_use'){ const tool = {t:'tool', n:shortTool(c.name), a:toolSum(c.input), o:'', running:true, ...(turnCard(c.name, c.input) || {})}; const dd = diffView.data(c.name, c.input); if(dd) tool.d = dd; L.b.push(tool); R.tools.set(c.id, tool);
           const fp = c.input && (c.input.file_path || c.input.notebook_path); if(fp && /^(Write|Edit|MultiEdit|NotebookEdit)$/.test(c.name) && !s.outputs.includes(fp)) s.outputs.unshift(fp); }
       }
       const u = ev.message.usage; if(u && ev.message.model !== '<synthetic>') s.ctx = ((u.input_tokens||0) + (u.cache_read_input_tokens||0) + (u.cache_creation_input_tokens||0) + (u.output_tokens||0)) / 1000;
