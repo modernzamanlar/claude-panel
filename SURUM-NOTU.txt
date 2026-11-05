@@ -1,0 +1,1 @@
+Sohbet yazarken odak artık kaymıyor; uzun sohbetler akıcı. Açık/koyu tema düğmesi yeniden çalışıyor ve seçim hatırlanıyor. Yeni: düşünme seviyesi seçimi ve bilgisayar kontrolü (Kontrol düğmesi: Chrome ve masaüstü uygulamaları; masaüstü aracı ilk açılışta tek tıkla kurulur, Node.js gerekir). Electron 45.2.3.

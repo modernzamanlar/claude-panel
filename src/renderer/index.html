@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: cpmedia:; media-src 'self' cpmedia: https: blob:;">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Claude Panel</title>
+<link rel="stylesheet" href="fonts.css">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div class="app">
+  <header class="topbar">
+    <div class="lights"><i></i><i></i><i></i></div>
+    <button class="ibtn" id="btnOrg" title="Sohbetler ve klasörler (⌘B)"><svg class="i" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9 4v16"/></svg></button>
+    <div class="brand"><span class="logo"><svg class="i" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M12 4v16"/></svg></span>Claude Panel</div>
+    <span class="vline"></span>
+    <div class="layouts" id="layouts">
+      <button data-l="1" title="Tek bölme"><svg viewBox="0 0 18 14" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="1" y="1" width="16" height="12" rx="2"/></svg></button>
+      <button data-l="2" title="İki sütun"><svg viewBox="0 0 18 14" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="1" y="1" width="16" height="12" rx="2"/><path d="M9 1v12"/></svg></button>
+      <button data-l="3" title="Üç sütun"><svg viewBox="0 0 18 14" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="1" y="1" width="16" height="12" rx="2"/><path d="M6.3 1v12M11.7 1v12"/></svg></button>
+      <button data-l="4" title="2×2"><svg viewBox="0 0 18 14" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="1" y="1" width="16" height="12" rx="2"/><path d="M9 1v12M1 7h16"/></svg></button>
+    </div>
+    <span class="tb-title" id="tbTitle"></span>
+    <span class="grow"></span>
+    <button class="upd" id="btnUpd" hidden></button>
+    <button class="ibtn" id="btnTheme" title="Tema"><svg class="i" viewBox="0 0 24 24"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></svg></button>
+    <button class="ibtn on" id="btnInfo" title="Oturum bilgisi (⌘I)"><svg class="i" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M15 4v16"/></svg></button>
+  </header>
+
+  <nav class="rail" id="rail"></nav>
+
+  <main class="main"><div class="grid l2" id="grid"></div></main>
+
+  <aside class="info" id="info"></aside>
+</div>
+
+<div class="org" id="org">
+  <aside class="fx-side" id="fxSide"></aside>
+  <section class="fx-main">
+    <div class="fx-bar">
+      <button class="ibtn" id="fxSideBtn" title="Kenar çubuğu"><svg class="i" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9 4v16"/></svg></button><div class="fx-nav"><button class="ibtn" id="fxBack" title="Geri (⌘[)"><svg class="i" viewBox="0 0 24 24"><path d="m15 18-6-6 6-6"/></svg></button><button class="ibtn" id="fxFwd" title="İleri (⌘])"><svg class="i" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></svg></button></div>
+      <nav class="crumbs" id="crumbs"></nav>
+      <span class="grow"></span>
+      <div class="seg" id="fxView"><button data-fv="grid" title="Simgeler"><svg class="i" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg></button><button data-fv="list" title="Liste"><svg class="i" viewBox="0 0 24 24"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg></button></div>
+      <button class="ibtn" id="fxSort" title="Sırala"><svg class="i" viewBox="0 0 24 24"><path d="M3 6h18M6 12h12M10 18h4"/></svg></button>
+      <button class="org-search" data-opensearch style="width:200px"><svg class="i" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg><span class="grow" style="text-align:left">Ara</span><span class="kbd">⌘K</span></button>
+      <button class="ibtn" id="btnFolder" title="Yeni klasör (⇧⌘N)"><svg class="i" viewBox="0 0 24 24"><path d="M12 10v6M9 13h6"/><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.7-.9l-.8-1.2A2 2 0 0 0 7.9 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/></svg></button>
+      <button class="btn pri" data-newchat><svg class="i" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>Yeni sohbet</button>
+    </div>
+    <div class="fx-body" id="fxBody"></div>
+    <div class="nf-drop" id="nfDrop"><svg class="i" viewBox="0 0 24 24"><path d="M12 10v6M9 13h6"/><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.7-.9l-.8-1.2A2 2 0 0 0 7.9 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/></svg><span><b>Yeni klasöre taşı</b><small>Buraya bırak</small></span></div>
+    <div class="fx-status"><span id="fxCount"></span><span class="grow"></span><span class="lbl">Bölmeye bırak</span><div class="slots" id="slots"></div></div>
+  </section>
+</div>
+<div class="srch" id="srch">
+  <div class="sr-top">
+    <div class="sr-box"><svg class="i" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg><input id="sq" placeholder="Başlık, mesaj, dosya veya proje ara…" autocomplete="off"><span class="kbd">Esc</span></div>
+    <div class="sr-opts" id="srOpts"></div>
+  </div>
+  <div class="sr-list"><div class="sr-in" id="srList"></div></div>
+  <div class="sr-foot"><span><span class="kbd">↑</span> <span class="kbd">↓</span> gez</span><span><span class="kbd">↵</span> <span id="srEnter">aktif bölmede aç</span></span><span>veya satırdaki <b>1–4</b> düğmesi</span><span><span class="kbd">⌘1–4</span> o bölmede aç</span><span><span class="kbd">Esc</span> kapat</span></div>
+</div>
+<div class="toast" id="toast"></div>
+
+<script src="markdown.js"></script>
+<script src="complete.js"></script>
+<script src="usage.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

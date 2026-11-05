@@ -1,0 +1,83 @@
+{
+  "name": "claude-panel",
+  "version": "0.2.7",
+  "description": "Claude Code sohbetlerini klasörlerde gruplayan, yan yana çalıştıran ve senkron tutan masaüstü paneli",
+  "main": "src/main/main.js",
+  "private": true,
+  "scripts": {
+    "start": "electron .",
+    "selftest": "electron . --selftest",
+    "test": "node scripts/test.js",
+    "test:ui": "scripts/ui-test/run.sh mac && scripts/ui-test/run.sh win",
+    "dist": "electron-builder --mac dmg",
+    "icon": "electron build/make-icon.js",
+    "dist:win": "electron-builder --win nsis --x64",
+    "dist:all": "npm run dist && npm run dist:win",
+    "release:win": "npm run dist:win && node scripts/release-win.js"
+  },
+  "author": "",
+  "license": "UNLICENSED",
+  "devDependencies": {
+    "electron": "^45.2.3",
+    "electron-builder": "^26.18.0"
+  },
+  "productName": "Claude Panel",
+  "build": {
+    "appId": "com.yasincelikbas.claudepanel",
+    "productName": "Claude Panel",
+    "files": [
+      "src/**/*",
+      "build/icon.png",
+      "package.json"
+    ],
+    "directories": {
+      "output": "dist",
+      "buildResources": "build"
+    },
+    "mac": {
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "arm64"
+          ]
+        }
+      ],
+      "icon": "build/icon.icns",
+      "category": "public.app-category.developer-tools",
+      "identity": null,
+      "extendInfo": {
+        "NSUserNotificationAlertStyle": "alert"
+      }
+    },
+    "dmg": {
+      "title": "Claude Panel",
+      "writeUpdateInfo": false
+    },
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "build/icon.png",
+      "artifactName": "Claude Panel Setup ${version}.${ext}"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Claude Panel",
+      "language": "1055",
+      "installerLanguages": [
+        "tr_TR"
+      ],
+      "warningsAsErrors": false
+    }
+  }
+}
