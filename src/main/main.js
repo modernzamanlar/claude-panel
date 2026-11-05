@@ -13,6 +13,7 @@ const { createUpdater } = require('./updater');
 const { SearchIndex } = require('./search');
 const { recentMedia, okBadgeIcon, dictateCommand } = require('./media');
 const { Runner, authStatus, openLoginTerminal, openRemoteTerminal, mcpList, controlStatus, installDesktop } = require('./runner');
+const { Term } = require('./term');
 
 const SELFTEST = process.argv.includes('--selftest');
 const IS_MAC = process.platform === 'darwin';
@@ -63,6 +64,10 @@ function syncSearch() {
     .catch(e => console.warn('arama dizini', e.message));
 }
 const runner = new Runner((ch, payload) => { if (win && !win.isDestroyed()) win.webContents.send(ch, payload); });
+// Terminal çekmecesi: etkin sohbetin klasöründe tek seferlik komutlar (main/term.js)
+const term = new Term((ch, payload) => { if (win && !win.isDestroyed()) win.webContents.send(ch, payload); });
+ipcMain.handle('term:run', (_e, opts) => term.run(opts));
+ipcMain.handle('term:stop', (_e, id) => term.stop(id));
 
 function createWindow() {
   win = new BrowserWindow({
@@ -340,5 +345,5 @@ app.on('before-quit', e => {
       .then(r => { if (r.response === 0) { quitConfirmed = true; app.quit(); } });
     return;
   }
-  runner.stopAll(); mirror.flush();
+  runner.stopAll(); term.stopAll(); mirror.flush();
 });

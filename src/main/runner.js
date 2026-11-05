@@ -407,4 +407,4 @@ async function mcpList(cwd) {
 
 // Testler için: bağımlılıklar ve önbellek sıfırlama
 const _test = { deps, winQuote, safeLabel, expand, reset(lp = null) { loginPathCache = lp; launchCache.clear(); } };
-module.exports = { Runner, authStatus, openLoginTerminal, openRemoteTerminal, mcpList, claudeBin, loginEnv, launchSpec, controlStatus, installDesktop, desktopMcp, _test };
+module.exports = { Runner, authStatus, openLoginTerminal, openRemoteTerminal, mcpList, claudeBin, loginEnv, launchSpec, controlStatus, installDesktop, desktopMcp, checkDir, _test };

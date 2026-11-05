@@ -59,6 +59,11 @@ contextBridge.exposeInMainWorld('api', {
       return () => ipcRenderer.removeListener('run:event', h);
     },
   },
+  term: {
+    run: opts => ipcRenderer.invoke('term:run', opts),
+    stop: id => ipcRenderer.invoke('term:stop', id),
+    onEvent: cb => { const h = (_e, p) => cb(p); ipcRenderer.on('term:event', h); return () => ipcRenderer.removeListener('term:event', h); },
+  },
   search: {
     query: q => ipcRenderer.invoke('search:query', q),
     onProgress: cb => { const h = (_e, p) => cb(p); ipcRenderer.on('search:progress', h); return () => ipcRenderer.removeListener('search:progress', h); },
