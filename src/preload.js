@@ -45,6 +45,7 @@ contextBridge.exposeInMainWorld('api', {
     login: () => ipcRenderer.invoke('claude:login'),
     remote: opts => ipcRenderer.invoke('claude:remote', opts),
     mcpList: cwd => ipcRenderer.invoke('claude:mcpList', cwd),
+    context: opts => ipcRenderer.invoke('claude:context', opts),
     control: () => ipcRenderer.invoke('claude:control'),
     installDesktop: () => ipcRenderer.invoke('claude:installDesktop'),
   },

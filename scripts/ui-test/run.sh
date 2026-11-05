@@ -13,11 +13,18 @@ M=${1:-mac}; ROOT=${0:A:h:h:h}; HERE=${0:A:h}
 D=$(mktemp -d "${TMPDIR:-/tmp}/cp-uitest-XXXXXX"); trap 'rm -rf "$D"' EXIT
 mkdir -p $D/home $D/mirror $D/out
 cd "$ROOT"
-STEPS=$(python3 -c "import sys; s=open(sys.argv[1]).read(); print('\n'.join(' '.join(l.strip() for l in b.strip().splitlines()) for b in s.split('//--')))" $HERE/steps.js)
+# Ek adımlar: scripts/ui-test/extra/*.js (her dosya bir ya da daha fazla adım, // -- ile ayrılır).
+# Her ek adım {name: 'kontrol adı', ok: true/false, ...ayrıntı} döndürür; run.sh bunları ayrı kontroller olarak sayar.
+STEPS=$(python3 -c "
+import sys, glob
+fs = [sys.argv[1]] + sorted(glob.glob(sys.argv[2] + '/extra/*.js'))
+bl = [b for f in fs for b in open(f).read().split('//--') if b.strip()]
+print('\n'.join(' '.join(l.strip() for l in b.strip().splitlines()) for b in bl))" $HERE/steps.js $HERE)
+NBASE=$(python3 -c "import sys; print(len([b for b in open(sys.argv[1]).read().split('//--') if b.strip()]))" $HERE/steps.js)
 PLAT=(); [[ $M == win ]] && PLAT=(CLAUDE_PANEL_UI_PLATFORM=win32)
 env $PLAT CLAUDE_PANEL_CLAUDE_BIN="$ROOT/test/fake-claude.js" FAKE_PERM=1 FAKE_DELAY=80 CLAUDE_PANEL_HOME=$D/home CLAUDE_PANEL_MIRROR=$D/mirror SELFTEST_OUT=$D/out SELFTEST_STEPS="$STEPS" TMPDIR=$D/ npx electron . --selftest > $D/log.txt 2>&1 || true
 env $PLAT CLAUDE_PANEL_HOME=$D/home CLAUDE_PANEL_MIRROR=$D/mirror SELFTEST_OUT=$D/out SELFTEST_STEPS='(async()=>({tema: document.documentElement.dataset.theme || null, prefs: WS.prefs, effort0: sess(S.panes[0]) && sess(S.panes[0]).effort, control0: sess(S.panes[0]) && sess(S.panes[0]).control, sort: FX.sort, side: S.side}))()' TMPDIR=$D/ npx electron . --selftest > $D/log2.txt 2>&1 || true
-python3 - $D/log.txt $D/log2.txt $M <<'PY'
+python3 - $D/log.txt $D/log2.txt $M $NBASE <<'PY'
 import sys, json
 def rep(f):
     t = open(f).read(); i = t.find('SELFTEST {')
@@ -70,6 +77,10 @@ checks = [
   ('ikinci açılış', bool(r2) and (r2.get('step1') or {}).get('tema') == 'light' and (r2.get('step1') or {}).get('effort0') == 'xhigh' and (r2.get('step1') or {}).get('control0') is True and (r2.get('step1') or {}).get('sort') == 'date' and (r2.get('step1') or {}).get('side') is False),
   ('renderer hatası yok', not [l for l in t.splitlines() if l.startswith('[renderer]')] and 'error' not in r),
 ]
+nbase = int(sys.argv[4])
+for k in sorted((k for k in r if k.startswith('step') and int(k[4:]) > nbase), key=lambda k: int(k[4:])):
+    x = r[k] if isinstance(r[k], dict) else {}
+    checks.append(('+ ' + str(x.get('name') or k), x.get('ok') is True))
 for n, ok in checks: print(('✔ ' if ok else '✖ ') + n)
 bad = [n for n, ok in checks if not ok]
 if bad: print(json.dumps({k: v for k, v in r.items() if k.startswith('step') or k == 'error'}, ensure_ascii=False)[-6000:]); sys.exit(1)

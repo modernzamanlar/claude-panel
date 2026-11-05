@@ -7,6 +7,12 @@ const args = process.argv.slice(2);
 if (args[0] === 'auth' && args[1] === 'status') { console.log(JSON.stringify({ loggedIn: process.env.FAKE_LOGGED_OUT ? false : true, authMethod: 'fake' })); process.exit(0); }
 if (args[0] === 'mcp' && args[1] === 'list') { console.log('Checking MCP server health…\n\nfake-docs: https://example.com/mcp - ✔ Connected\nfake-voice: https://voice.example/mcp - Needs authentication'); process.exit(0); }
 const arg = n => { const i = args.indexOf(n); return i >= 0 ? args[i + 1] : null; };
+// `claude -p /context --resume <id> --no-session-persistence --output-format json`: gerçek CLI'den alınmış rapor (model çağrılmaz)
+if (args[0] === '-p' && args[1] === '/context') {
+  const r = require('./fixtures/context-opus-1m.json');
+  console.log(JSON.stringify({ ...r, session_id: arg('--resume'), args }));
+  process.exit(0);
+}
 let sid = arg('--session-id') || arg('--resume') || crypto.randomUUID();
 if (args.includes('--fork-session')) sid = crypto.randomUUID();
 const delay = +(process.env.FAKE_DELAY || 80);
@@ -37,7 +43,7 @@ function ask(tool_name, input) {
   out({ type: 'control_request', request_id, request: { subtype: 'can_use_tool', tool_name, input, description: input.description || '', permission_suggestions: [{ type: 'addRules', rules: [{ toolName: tool_name, ruleContent: input.command || '' }], behavior: 'allow', destination: 'localSettings' }] } });
   return new Promise(r => waiters.set(request_id, r));
 }
-function finish(result, extra = {}) { out({ type: 'result', subtype: 'success', is_error: false, result, total_cost_usd: 0.0123, session_id: sid, args, ...extra }); }
+function finish(result, extra = {}) { out({ type: 'result', subtype: 'success', is_error: false, result, total_cost_usd: 0.0123, session_id: sid, args, modelUsage: { 'claude-opus-5-5': { inputTokens: 5, outputTokens: 20, cacheReadInputTokens: 42000, contextWindow: 1000000, maxOutputTokens: 64000 }, 'claude-haiku-4-5-20251001': { inputTokens: 300, outputTokens: 10, contextWindow: 200000 } }, ...extra }); }
 
 async function turn(msg) {
   const content = msg.message.content;
