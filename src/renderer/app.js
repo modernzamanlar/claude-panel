@@ -794,8 +794,49 @@ function planCard(items){
   const done = items.filter(i => i.s === 'completed').length;
   return `<div class="plan-card"><div class="pc-h">${ic('note')}<b>Görevler</b><span>${done}/${items.length}</span></div>${items.map(i => `<div class="pc-i ${i.s}"><span class="pc-b">${i.s === 'completed' ? '✓' : i.s === 'in_progress' ? '<span class="spin"></span>' : ''}</span><span>${esc(i.c)}</span></div>`).join('')}</div>`;
 }
+/* ---------- Mesajı düzenle ve oradan devam et ----------
+   Diskten okunan kullanıcı mesajında `at` = önündeki son asistan mesajının uuid'si ('' = sohbetin başı; sessions.js).
+   Düzenlenen metin --resume-session-at <at> --fork-session ile YENİ bir oturuma gider; asıl sohbet olduğu gibi kalır.
+   Görseller/ekler yeniden gönderilmez, yalnızca metin. */
+const UE_AT = /^([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})?$/i;
+const ueCan = m => typeof m.at === 'string' && UE_AT.test(m.at);
+const ueIs = (s, m) => !!s.uedit && s.uedit.at === m.at && s.uedit.ts === m.ts;
+function userHTML(s, m, mi){
+  const tail = `${thumbs(m.imgs, 'th-u')}${mediaHTML(s, m, mi, 'u')}`;
+  if(ueIs(s, m)) return `<div class="u ue-box"><textarea class="ue-ta" data-uedta="${s.id}" rows="3">${esc(m.t)}</textarea>
+    <div class="ue-acts"><span class="ue-hint">Enter gönderir · Shift+Enter yeni satır · Esc vazgeçer<br>Yeni bir sohbet açılır; asıl sohbet olduğu gibi kalır.</span>
+    <button class="btn" data-uex="${s.id}">Vazgeç</button><button class="btn pri" data-uesend="${s.id}">${ic('up')}Gönder</button></div></div>${tail}`;
+  if(!ueCan(m) || s.draft) return `<div class="u">${esc(m.t)}</div>${tail}`;
+  const tip = s.run ? 'Sohbet çalışırken düzenlenemez' : 'Düzenle: bu mesajı değiştirip buradan devam et. Yeni bir sohbet açılır; asıl sohbet olduğu gibi kalır.';
+  return `<div class="u-line"><button class="ibtn ue-btn" data-uedit="${mi}" data-sid="${s.id}" title="${tip}"${s.run ? ' disabled' : ''}>${ic('edit')}</button><div class="u">${esc(m.t)}</div></div>${tail}`;
+}
+function ueOpen(s, mi){
+  const m = s && s.msgs[mi]; if(!m || s.run || !ueCan(m)) return;
+  s.uedit = {at: m.at, ts: m.ts}; renderPanes();
+  const ta = document.querySelector(`[data-uedta="${CSS.escape(s.id)}"]`);
+  if(ta){ ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length); ta.style.height = ta.scrollHeight + 'px'; }
+}
+function ueCancel(s){ if(s && s.uedit){ s.uedit = null; renderPanes(); } }
+async function ueSend(s){
+  const ta = document.querySelector(`[data-uedta="${CSS.escape(s.id)}"]`);
+  const mi = s.uedit ? s.msgs.findIndex(m => m.r === 'u' && ueIs(s, m)) : -1;
+  const text = ta ? ta.value.trim() : ''; if(mi < 0 || !text) return;
+  if(s.run){ toast('Sohbet çalışırken düzenlenemez · tur bitince gönder'); return; }
+  if(!S.auth || !S.auth.loggedIn){ await checkAuth(); if(!S.auth.loggedIn){ toast('Önce Claude Code girişi yapılmalı'); return; } }
+  const at = s.msgs[mi].at; s.uedit = null;
+  if(at){ // gönderilemezse düzenleyici yazılan metinle geri açılır
+    if(!(await sendNow(s, text, [], {fork:true, resumeAt:at, cut:mi}))){ ueOpen(s, mi); const t2 = document.querySelector(`[data-uedta="${CSS.escape(s.id)}"]`); if(t2) t2.value = text; }
+    return;
+  }
+  // Sohbetin ilk mesajı: önünde geçmiş yok → aynı klasörde yeni sohbet
+  const uuid = crypto.randomUUID(), id = sid(uuid);
+  const n = {...s, id, uuid, draft:true, title:s.title + ' (düzenlendi)', rawTitle:s.rawTitle || s.title, msgs:[], outputs:[], skipped:0, turns:0, run:null, queue:[], askFork:false,
+    status:'idle', pinned:false, trashed:false, hidden:false, remote:false, fresh:false, unseen:false, loaded:true, lastTs:new Date().toISOString(), ago:'şimdi', ctx:0, localUntil:Date.now() + 10*60*1000};
+  S.sessions.unshift(n); S.items.unshift(id); S.panes = S.panes.map(p => p === s.id ? id : p);
+  if(await sendNow(n, text, [])) toast('Düzenlenen mesajla yeni sohbet başladı · asıl sohbet duruyor');
+}
 function msgHTML(s, m, mi){
-  if(m.r==='u') return `<div class="u">${esc(m.t)}</div>${thumbs(m.imgs, 'th-u')}${mediaHTML(s, m, mi, 'u')}`;
+  if(m.r==='u') return userHTML(s, m, mi);
   const out = []; let grp = [], gi = 0;
   const flush = () => { if(grp.length){ out.push(toolGroupHTML(grp, s.id + '|' + mi + '|' + gi++)); grp = []; } };
   const last = mi === s.msgs.length - 1 && !s.run;
@@ -1356,6 +1397,9 @@ document.addEventListener('click', e => {
   const swp = t.closest('[data-swap]'); if(swp){ S.active = +swp.dataset.swap; SR.q = ''; const sq = $('#sq'); if(sq) sq.value = ''; renderRail(); setSearch(true); return; }
   const mo = t.closest('[data-more]'); if(mo){ const r = mo.getBoundingClientRect(); sessMenu(mo.dataset.more, r.left-160, r.bottom+4); return; }
   if(t.closest('[data-watch]')){ toast('Salt okuma modunda canlı izleniyor'); return; }
+  const ue = t.closest('[data-uedit]'); if(ue){ if(!ue.disabled) ueOpen(sess(ue.dataset.sid), +ue.dataset.uedit); return; }
+  const ues = t.closest('[data-uesend]'); if(ues){ const s = sess(ues.dataset.uesend); if(s) ueSend(s); return; }
+  const uex = t.closest('[data-uex]'); if(uex){ ueCancel(sess(uex.dataset.uex)); return; }
   const fk = t.closest('[data-fork]'); if(fk){
     const s = sess(fk.dataset.fork); const id='s'+Date.now();
     S.sessions.push({...s, id, title:s.title+' (çatal)', status:'idle', ago:'şimdi', msgs:[...s.msgs], pinned:false, remote:false}); S.items.splice(S.items.indexOf(s.id)+1,0,id);
@@ -1397,6 +1441,12 @@ document.addEventListener('keydown', e => {
   if(e.target.matches('[data-ren]')){
     if(e.key==='Enter'){ commitRename(e.target); render(); }
     if(e.key==='Escape'){ renaming=null; renderBoard(); }
+    e.stopPropagation(); return;
+  }
+  if(e.target.matches('[data-uedta]')){ // mesaj düzenleyici: Enter gönderir, Shift+Enter yeni satır, Esc vazgeçer
+    const s = sess(e.target.dataset.uedta);
+    if(e.key==='Enter' && !e.shiftKey && !e.isComposing){ e.preventDefault(); if(s) ueSend(s); }
+    if(e.key==='Escape'){ e.preventDefault(); ueCancel(s); }
     e.stopPropagation(); return;
   }
   if(e.target.matches('[data-ta]') && e.key==='Tab' && !e.shiftKey && e.target._sug){ e.preventDefault(); acceptGhost(e.target); return; }
@@ -1452,6 +1502,7 @@ document.addEventListener('change', e => {
 });
 document.addEventListener('input', e => {
   if(e.target.id==='ncDq'){ ncSync(); NC.dq = e.target.value; renderNC(); const i=$('#ncDq'); i.focus(); i.setSelectionRange(999,999); }
+  if(e.target.matches && e.target.matches('[data-uedta]')){ e.target.style.height = 'auto'; e.target.style.height = e.target.scrollHeight + 'px'; }
   if(e.target.matches && e.target.matches('[data-qfree]')){ const s = sess(S.panes[+e.target.closest('.pane').dataset.pane]); if(s && s.run){ (s.run.free = s.run.free || {})[+e.target.dataset.qfree] = e.target.value; } }
   if(e.target.id==='sq'){ SR.q = e.target.value; SR.sel = 0; renderSearch(); backendSearch(); }
   if(e.target.id==='nfCq'){ NF.cq = e.target.value; filterNFPicks(); }
@@ -1894,12 +1945,12 @@ async function sendNow(s, text, att, opt = {}){
   s.attach = [];
   const live = {r:'a', b:[], streaming:true, draft:'', local:true}; s.msgs.push(live);
   const runId = crypto.randomUUID();
-  s.run = {runId, live, tools:new Map(), fork:!!opt.fork, prevStatus:s.status, startedAt:Date.now()};
+  s.run = {runId, live, tools:new Map(), fork:!!opt.fork, cut:opt.cut, prevStatus:s.status, startedAt:Date.now()};
   s.status = 'running'; s.ago = 'şimdi'; s.lastTs = new Date().toISOString(); s.fresh = false;
   RUNS.set(runId, s.id);
   render(); { const pi = S.panes.indexOf(s.id); if(pi >= 0) scrollPaneBottom(pi); }
   try {
-    await API.run.start({runId, sessionId:s.uuid, newSession:isNew, fork:!!opt.fork, cwd:s.cwd || s.project, text, images, files, model:s.modelPick || (isNew ? s.newModel : null), permissionMode:pmodeOf(s), effort:effortOf(s), control:controlOf(s)});
+    await API.run.start({runId, sessionId:s.uuid, newSession:isNew, fork:!!opt.fork, resumeAt:opt.resumeAt || null, cwd:s.cwd || s.project, text, images, files, model:s.modelPick || (isNew ? s.newModel : null), permissionMode:pmodeOf(s), effort:effortOf(s), control:controlOf(s)});
     s.draft = false; return true;
   } catch(e){
     RUNS.delete(runId); s.run = null; s.status = 'idle'; live.streaming = false;
@@ -1928,11 +1979,13 @@ function forkTo(s, newUuid){
   const R = s.run; const nid = sid(newUuid);
   const userMsg = s.msgs[s.msgs.length - 2];
   s.msgs.splice(-2, 2); s.run = null; s.status = R.prevStatus || 'idle';
-  const n = {...s, localUntil:Date.now() + 10*60*1000, id:nid, uuid:newUuid, title:s.title + ' (çatal)', rawTitle:s.rawTitle || s.title, msgs:[...s.msgs, userMsg, R.live], run:R, status:'running', pinned:false, trashed:false, fresh:false, loaded:true};
+  // Düzenlenen mesajda (R.cut) yeni oturum yalnızca o mesajdan önceki geçmişi taşır
+  const ed = R.cut != null, base = ed ? s.msgs.slice(0, R.cut) : s.msgs;
+  const n = {...s, localUntil:Date.now() + 10*60*1000, id:nid, uuid:newUuid, title:s.title + (ed ? ' (düzenlendi)' : ' (çatal)'), rawTitle:s.rawTitle || s.title, msgs:[...base, userMsg, R.live], run:R, status:'running', pinned:false, trashed:false, fresh:false, loaded:true, uedit:null};
   S.sessions.unshift(n); S.items.unshift(nid);
   S.panes = S.panes.map(p => p === s.id ? nid : p);
   RUNS.set(R.runId, nid);
-  render(); toast('Çatallandı: yeni oturumda devam ediliyor');
+  render(); toast(ed ? 'Mesaj düzenlendi: yeni sohbette devam ediliyor · asıl sohbet duruyor' : 'Çatallandı: yeni oturumda devam ediliyor');
   return n;
 }
 

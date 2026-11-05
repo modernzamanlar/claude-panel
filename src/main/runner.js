@@ -1,7 +1,7 @@
 // Faz 2: Panelden Claude Code çalıştırma.
 // Her gönderim için kurulu `claude` CLI'si başsız (print) modda başlatılır:
 //   claude -p --input-format stream-json --output-format stream-json --verbose --include-partial-messages
-//          [--resume <id> | --session-id <yeni-uuid>] [--fork-session] [--model m] [--permission-mode p]
+//          [--resume <id> | --session-id <yeni-uuid>] [--fork-session] [--resume-session-at <mesaj-uuid>] [--model m] [--permission-mode p]
 // Mesajlar Claude Code'un kendi .jsonl dosyasına yazıldığı için Claude uygulaması/CLI ile senkron kalır.
 // Her bölme kendi sürecini çalıştırır; süreçler birbirini beklemez.
 // Faz 3: `--permission-prompt-tool stdio` ile izin gerektiren araçlar için CLI stdout'a
@@ -165,6 +165,7 @@ const PERMISSION_MODES = new Set(['default', 'acceptEdits', 'bypassPermissions',
 const MODEL_RX = /^(opus|sonnet|haiku|default|claude-[a-z0-9.-]+(\[1m\])?)$/i;
 const EFFORTS = new Set(['low', 'medium', 'high', 'xhigh', 'max']); // claude --effort
 function checkUuid(id) { if (!UUID.test(String(id))) throw new Error('Geçersiz oturum kimliği'); return String(id); }
+function checkResumeAt(id) { if (typeof id !== 'string' || !UUID.test(id)) throw new Error('Geçersiz devam noktası'); return id; }
 function checkDir(p) {
   const d = expand(p);
   let ok = false; try { ok = !!d && fs.statSync(d).isDirectory(); } catch {}
@@ -252,7 +253,8 @@ class Runner {
     this.runs = new Map();      // runId -> {proc, sessionId, ...}
   }
   /**
-   * opts: {runId, sessionId?, newSession?, fork?, cwd, text, model?, permissionMode?, effort?, control?}
+   * opts: {runId, sessionId?, newSession?, fork?, resumeAt?, cwd, text, model?, permissionMode?, effort?, control?}
+   * resumeAt: asistan mesajının uuid'si → --resume-session-at (+ --fork-session): o mesajdan sonrası yeni oturuma alınmaz.
    * Dönüş: {runId, sessionId} — yeni sohbette sessionId önceden üretilir (--session-id).
    */
   async start(opts) {
@@ -264,11 +266,16 @@ class Runner {
     if (opts.model && !MODEL_RX.test(String(opts.model))) throw new Error('Geçersiz model: ' + opts.model);
     if (opts.permissionMode && !PERMISSION_MODES.has(opts.permissionMode)) throw new Error('Geçersiz izin modu: ' + opts.permissionMode);
     if (opts.effort && !EFFORTS.has(opts.effort)) throw new Error('Geçersiz düşünme seviyesi: ' + String(opts.effort).slice(0, 20));
+    const resumeAt = opts.resumeAt ? checkResumeAt(opts.resumeAt) : null;
+    if (resumeAt && opts.newSession) throw new Error('Yeni sohbette devam noktası olamaz');
+    const fork = !!(opts.fork || resumeAt);
     const runId = opts.runId || crypto.randomUUID();
     const args = ['-p', '--input-format', 'stream-json', '--output-format', 'stream-json', '--verbose', '--include-partial-messages'];
     let sessionId = opts.sessionId;
     if (opts.newSession) { sessionId = sessionId || crypto.randomUUID(); args.push('--session-id', sessionId); }
-    else { if (!sessionId) throw new Error('Oturum kimliği yok'); args.push('--resume', sessionId); if (opts.fork) args.push('--fork-session'); }
+    else { if (!sessionId) throw new Error('Oturum kimliği yok'); args.push('--resume', sessionId); if (fork) args.push('--fork-session'); }
+    // Mesajı düzenleyip oradan devam: geçmiş bu asistan mesajına kadar alınır, her zaman yeni oturuma çatallanır (asıl sohbet bozulmaz)
+    if (resumeAt) args.push('--resume-session-at', resumeAt);
     if (opts.model) args.push('--model', opts.model);
     if (opts.permissionMode) args.push('--permission-mode', opts.permissionMode);
     if (opts.effort) args.push('--effort', opts.effort);
@@ -286,7 +293,7 @@ class Runner {
     const proc = spawnClaude(bin, args, { cwd, env, stdio: ['pipe', 'pipe', 'pipe'] });
     const run = { runId, proc, sessionId, startedAt: Date.now(), stderr: '', done: false, pending: new Set(), timers: [] };
     this.runs.set(runId, run);
-    this.send('run:event', { runId, type: 'started', sessionId, fork: !!opts.fork, newSession: !!opts.newSession });
+    this.send('run:event', { runId, type: 'started', sessionId, fork, newSession: !!opts.newSession });
 
     let buf = '';
     proc.stdout.setEncoding('utf8');
