@@ -59,6 +59,22 @@ Veri: `~/.claude/projects` yalnızca okunur. `~/.claude-panel/`: `workspace.json
 - Kullanıcı bu sohbete panelden de yazabilir (aynı klasörde ikinci ajan `sdk-cli`); büyük işten önce son `.jsonl` kayıtlarına bak.
 - Kimlik bilgisi/parola girilmez; Claude girişini kullanıcı yapar.
 
+## Yapılacaklar (sırayla; 2026-11-05'te durduruldu)
+Claude Code'da olup panelde olmayan özellikler 6 ajanla ayrı dallarda yapılıyordu. Her dal `0.2.8` (2fd1c5f) üstünde; birleştirme yapılmadı.
+| Dal (GitHub) | Durum |
+|---|---|
+| `ozellik/dosya-farki` | **Bitti**: Edit/MultiEdit/Write/NotebookEdit `+N −M` ve renkli fark (`src/renderer/diff.js`, %100 kapsam, 368 birim + 41 UI testi geçti). Birleştirmeye hazır. |
+| `ozellik/at-dosya` | YARIM: `@` ile dosya önerisi (`main/files.js`, `renderer/mention*.js`). Test edilmedi. `-p` modunun `@yol`u açıp açmadığı denenecekti. |
+| `ozellik/mesaj-duzenle` | YARIM: eski mesajı düzenleyip o noktadan yeni kopyada devam (runner `resumeAt`, sessions uuid). CLI'nin gizli `--resume-session-at` bayrağı doğrulanacaktı. |
+| `ozellik/terminal` | YARIM: alt çekmecede komut çalıştırma (`main/term.js`, `renderer/ansi.js`, `renderer/terminal.js`; node-pty yok, komut başına süreç). |
+| `ozellik/tarayici` | YARIM: sağda önizleme tarayıcısı (`main/browser.js` WebContentsView, ayrı oturum, yalnızca http/https). |
+| `ozellik/baglam` | YARIM: gerçek bağlam kullanımı (`claude -p "/context"` çıktısı, `renderer/ctxusage.js`, `test/fixtures/context-*.json`). |
+Sıradaki adımlar:
+1. Yarım dalları tamamla (her biri: %100 kapsam, `scripts/ui-test/extra/<özellik>.js` UI testi, Mac+Windows taklidi, ekran görüntüsü). Dallar `extra/` desteğinden (ceda631) önce açıldı: `main`'i içine al.
+2. Dalları `main`'e tek tek birleştir (çakışmalar çoğunlukla `app.js`, `styles.css`, `main.js`, `preload.js`, `index.html`), sonra `npm test`, `npm run test:cov` (yeni modülleri ekle), `npm run test:ui`.
+3. **Uzaktan Kontrol penceresi** (kullanıcı kararı: küçültülmüş açılsın; kapatılabiliyorsa kapansın, gizlenebiliyorsa gizlensin). Bulgular: CLI var olan sohbeti yalnızca TTY'li etkileşimli modda (`--resume <id> --remote-control`) açıyor; `-p` ile bayrak yok sayılıyor; `claude remote-control` sunucu modu pencere açmıyor ama var olan yerel sohbete bağlanmıyor (`--session-id` claude.ai oturum kimliği ister, ilk açılışta "Enable Remote Control? (y/n)" sorar, güvenilmeyen klasörde hata verir). Yapılacak: Windows'ta `start "" /min` ile küçültülmüş cmd, Mac'te Terminal arka planda (`open -g`); ilk açılış onayları (klasör güveni, "Claude in Chrome" tanıtımı) için panelde "Pencereyi göster" düğmesi; kapatma düğmesi süreci sonlandırsın.
+4. Sürüm 0.2.9: `SURUM-NOTU.txt`, `PLAN.md` bölüm 22, yayın akışı.
+
 ## Bekleyenler
 - **Gerçek Windows'ta denenmedi:** NAS güncellemesi, `C:\Claude Panel` yansısı, kapanış onayı, Uzaktan Kontrol (claude.ai'den bağlanma), Win+H sesli yazma, görev çubuğu sayacı ve bildirimler, agent-desktop (`npm install -g agent-desktop`).
 - **Exe kod imzası (Authenticode):** sertifika yok → SmartScreen uyarısı.
