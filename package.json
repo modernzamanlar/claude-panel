@@ -1,6 +1,6 @@
 {
   "name": "claude-panel",
-  "version": "0.2.7",
+  "version": "0.2.8",
   "description": "Claude Code sohbetlerini klasörlerde gruplayan, yan yana çalıştıran ve senkron tutan masaüstü paneli",
   "main": "src/main/main.js",
   "private": true,
@@ -13,7 +13,8 @@
     "icon": "electron build/make-icon.js",
     "dist:win": "electron-builder --win nsis --x64",
     "dist:all": "npm run dist && npm run dist:win",
-    "release:win": "npm run dist:win && node scripts/release-win.js"
+    "release:win": "npm run dist:win && node scripts/release-win.js",
+    "test:cov": "node --test --experimental-test-coverage --test-coverage-include=src/main/media.js --test-coverage-include=src/renderer/complete.js --test-coverage-include=src/renderer/usage.js --test-coverage-include=src/renderer/markdown.js test/q-media.test.js test/q-complete.test.js test/q-usage.test.js test/q-markdown.test.js"
   },
   "author": "",
   "license": "UNLICENSED",

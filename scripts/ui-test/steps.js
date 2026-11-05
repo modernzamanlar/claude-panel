@@ -142,3 +142,72 @@
     res.bosAramaAcildi = !!S.panes[1]; }
   return res;
 })()
+//--
+(async()=>{
+  const res = {};
+  res.yeniAd = SMART[':fresh'].name;
+  setOrg(true); go(null); await W(200);
+  const s9 = S.sessions.find(x => !gone(x.id) && !S.panes.includes(x.id)); s9.trashed = true; render(); await W(100);
+  document.querySelector('.fx-si[data-nav=":trash"]').dispatchEvent(new MouseEvent('contextmenu', {bubbles:true, cancelable:true, clientX:60, clientY:400})); await W(50);
+  const be = document.querySelector('.menu [data-m="bgempty"]'); res.copMenu = !!be; be && be.click(); await W(100);
+  res.copBos = trashIds().length === 0; s9.hidden = false; s9.trashed = false;
+  S.folders.push({id:'fT1', name:'TestUst', color:'#c96442', parent:null, open:true}, {id:'fT2', name:'Alt', color:'#c96442', parent:'fT1', trashed:true}); S.items.push('fT1', 'fT2'); renderBoard(); await W(50);
+  res.okYok = !!document.querySelector('.fx-si[data-nav="fT1"]') && !document.querySelector('.fx-si[data-nav="fT1"] [data-tw]');
+  S.folders.find(f => f.id === 'fT2').trashed = false; renderBoard(); res.okVar = !!document.querySelector('.fx-si[data-nav="fT1"] [data-tw]');
+  S.folders = S.folders.filter(f => !f.id.startsWith('fT')); S.items = S.items.filter(x => !x.startsWith('fT'));
+  setOrg(false); S.layout = 2; render(); await W(100);
+  setSearch(true); await W(300); const op = document.querySelector('#srList .sr-row .op');
+  res.aramaDugme = !!op && +getComputedStyle(op).opacity > 0.5 && op.querySelectorAll('[data-sopen]').length === nPanes(); setSearch(false);
+  const sw = document.querySelector('[data-pane="0"] [data-swap]'); sw.click(); await W(200); res.swap = SR.open && S.active === 0; setSearch(false);
+  const s = sess(S.panes[0]), keep = s.msgs, p0 = () => document.querySelector('[data-pane="0"]');
+  s.msgs = [...keep, {r:'a', b:[{t:'text', v:'<p>Dosya <code>Görseller/a.png</code></p>'}, {t:'tool', n:'claude-in-chrome · browser_batch', a:'x', o:''}, {t:'tool', n:'claude-in-chrome · browser_batch', a:'y', o:''}, {t:'tool', n:'Bash', a:'ls', o:'', err:true},
+    {t:'tool', n:'ccd_turn · update_plan', a:'', o:'', plan:null}, {t:'tool', n:'ccd_turn · update_plan', a:'', o:'', plan:[{c:'A', s:'completed'}, {c:'B', s:'in_progress'}]}, {t:'tool', n:'ccd_turn · wrap_up', a:'', o:'', card:{recap:'Bitti.', ask:'Devam?', actions:['Evet', 'Hayır']}}]}];
+  s.status = 'idle'; renderPanes(); await W(100);
+  const gs = p0().querySelectorAll('.tgroup'), g = gs[gs.length - 1]; res.grup = g ? g.querySelector('.tg-h').textContent.replace(/\s+/g, ' ').trim() : null;
+  g.querySelector('.tg-h').click(); res.grupAcik = g.classList.contains('open');
+  s.msgs = [...s.msgs]; renderPanes(); res.grupAcikKaldi = [...p0().querySelectorAll('.tgroup')].pop().classList.contains('open');
+  const pcs = p0().querySelectorAll('.plan-card'); res.plan = pcs.length ? pcs[pcs.length - 1].textContent.replace(/\s+/g, '') : null;
+  res.kart = !!p0().querySelector('.next-card [data-reply="Evet"]');
+  const fpl = () => { const l = p0().querySelectorAll('code.fpath'); return l[l.length - 1]; };
+  res.fpath = fpl()?.dataset.fp;
+  fpl().dispatchEvent(new MouseEvent('contextmenu', {bubbles:true, cancelable:true, clientX:300, clientY:300})); await W(50);
+  res.yolMenu = [...document.querySelectorAll('.menu [data-m]')].map(b => b.dataset.m); closeMenu();
+  s.status = 'elsewhere'; renderPanes(); await W(50);
+  res.baskaYer = p0().querySelector('.status.else')?.textContent.trim(); res.banner = p0().querySelector('.banner.info')?.textContent.trim();
+  const SENT = []; const origSend = sendNow; sendNow = (ss, text, ...r) => { SENT.push(text); return origSend(ss, text, ...r); };
+  p0().querySelector('.next-card [data-reply="Evet"]').click(); await W(200);
+  res.catalKart = !!p0().querySelector('.fork-card');
+  p0().querySelector('.fork-card [data-fsend="force"]').click();
+  for (let k = 0; k < 40 && !(s.run && s.run.pendings && s.run.pendings.length); k++) await W(100);
+  res.cevapGitti = s.msgs.some(m => m.r === 'u' && m.t === 'Evet');
+  res.kopek = !!p0().querySelector('.send.busy img.dog8');
+  const ta = p0().querySelector('[data-ta]'); ta.focus(); ta.value = 'sıradaki mesaj'; ta.dispatchEvent(new Event('input', {bubbles:true}));
+  ta.dispatchEvent(new KeyboardEvent('keydown', {key:'Enter', bubbles:true, cancelable:true})); await W(100);
+  res.sirada = (s.queue || []).length; res.siraKart = !!p0().querySelector('.queue');
+  for (let round = 0; round < 2; round++) {
+    for (let k = 0; k < 60 && !(s.run && s.run.pendings && s.run.pendings.length); k++) await W(100);
+    p0().querySelector('[data-perm="allow"]')?.click();
+    for (let k = 0; k < 60 && s.run; k++) await W(100);
+    await W(1200);
+  }
+  res.siraGitti = SENT.join('|') === 'Evet|sıradaki mesaj' && !(s.queue || []).length; sendNow = origSend;
+  res.dikkat = attentionCount() > 0 && lastBadge > 0;
+  const ta2 = p0().querySelector('[data-ta]'); ta2.focus(); ta2.value = '/dur'; ta2.dispatchEvent(new Event('input', {bubbles:true}));
+  res.hayalet = p0().querySelector('.ghost').textContent;
+  ta2.dispatchEvent(new KeyboardEvent('keydown', {key:'Tab', bubbles:true, cancelable:true}));
+  res.tabSonra = ta2.value; ta2.value = ''; ta2.dispatchEvent(new Event('input', {bubbles:true}));
+  p0().querySelector('[data-tpl]').click(); await W(50);
+  res.sablonMenu = document.querySelectorAll('.menu [data-m="tplins"]').length; document.querySelector('.menu [data-m="tplins"]').click();
+  res.sablonEklendi = ta2.value.length > 0; ta2.value = '';
+  p0().querySelector('[data-mic]').click(); await W(100); res.mic = document.activeElement === p0().querySelector('[data-ta]');
+  const NOWm = Date.now(); WS.prefs.usageHist = [0, 1, 2].map(k => ({t: NOWm - (2 - k) * 36e5, w: {seven_day: 0.5 + k * 0.05, five_hour: 0.2}}));
+  USAGE = {w:{seven_day:{u:0.6, resetsAt:Math.floor(NOWm/1000) + 3*86400, at:NOWm}, five_hour:{u:0.2, resetsAt:Math.floor(NOWm/1000) + 3600, at:NOWm}}, status:'allowed', at:NOWm};
+  usageMenu(100, 100); res.grafik = !!document.querySelector('.menu .use-spark polyline'); res.tahmin = [...document.querySelectorAll('.menu .use-f')].map(x => x.textContent.trim()); closeMenu();
+  S.info = true; renderInfo(); await W(1200); res.medya = !!document.querySelector('#info .isec h4') && document.querySelector('#info').textContent.includes('Son medya');
+  const dog = decodeURIComponent(location.pathname).replace(/index\.html$/, 'img/dog8.png');
+  s.msgs = [...keep, {r:'a', b:[{t:'text', v:`<p><code>${dog}</code></p>`}]}]; renderPanes(); await W(50);
+  const cs = p0().querySelectorAll('code.fpath'); cs[cs.length - 1].click(); await W(600);
+  res.yolOnizleme = !!document.querySelector('#lb .lb-img'); document.querySelector('#lb')?.remove();
+  s.msgs = keep; s.status = 'idle'; renderPanes();
+  return res;
+})()

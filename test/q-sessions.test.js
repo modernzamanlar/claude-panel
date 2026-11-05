@@ -697,3 +697,20 @@ test('artımlı yükleyici: en çok `max` dosyanın durumu tutulur (en az kullan
 test('artımlı yükleyici: olmayan dosya hata verir', async () => {
   await assert.rejects(new SessionLoader().load(path.join(newDir(), 'yok.jsonl')), /ENOENT/);
 });
+
+// --- Claude uygulamasının tur araçları kart olarak (0.2.8) ---
+test('turnCard: wrap_up → sonraki adım kartı, update_plan → görev listesi; diğerleri null', () => {
+  const { turnCard } = require('../src/main/sessions');
+  assert.deepStrictEqual(turnCard('mcp__ccd_turn__wrap_up', { recap: 'Bitti.', ask: 'Yayınlayayım mı?', actions: [{ label: 'Evet' }, { label: '' }, null, { label: 'Hayır' }, { label: 'X' }, { label: 'Y' }] }),
+    { card: { recap: 'Bitti.', ask: 'Yayınlayayım mı?', actions: ['Evet', 'Hayır', 'X'] } });
+  assert.deepStrictEqual(turnCard('wrap_up', { recap: 5 }), { card: { recap: '', ask: '', actions: [] } });
+  assert.strictEqual(turnCard('wrap_up', { recap: 'x'.repeat(2000) }).card.recap.length, 1200);
+  assert.deepStrictEqual(turnCard('mcp__ccd_turn__update_plan', { items: [{ content: 'A', status: 'completed' }, { content: 'B', status: 'in_progress' }, { content: 'C', status: 'garip' }, null] }),
+    { plan: [{ c: 'A', s: 'completed' }, { c: 'B', s: 'in_progress' }, { c: 'C', s: 'pending' }, { c: '', s: 'pending' }] });
+  assert.deepStrictEqual(turnCard('update_plan', { advance: true }), { plan: null });
+  assert.strictEqual(turnCard('update_plan', { items: Array(20).fill({ content: 'x' }) }).plan.length, 12);
+  assert.strictEqual(turnCard('Bash', { command: 'ls' }), null);
+  assert.strictEqual(turnCard('wrap_up', null), null);
+  assert.strictEqual(turnCard(null, {}), null);
+  assert.strictEqual(turnCard('not_wrap_up_x', {}), null);
+});

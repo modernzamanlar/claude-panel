@@ -4,7 +4,8 @@
 # Kullanım: scripts/ui-test/run.sh [mac|win]   (win: Mac'te Windows arayüzünü taklit eder)
 # Denenenler: tema düğmesi, düzenler, sohbetler panosu ve bölme yuvaları, arama, yardım (Ctrl/⌘), bilgi paneli,
 # yeni sohbet, düşünme seviyesi, Kontrol, ek kaldırma, akışta odak korunması, izin kartı, durdurma,
-# kalan kullanım, sohbetteki görseller ve büyütme, boş bölmede sohbet arama,
+# Yeni/çöp/ok, arama bölme düğmeleri, araç grupları, kartlar, dosya yolları, çatal kartı, sıra, sayaç, Tab tamamlama,
+# şablonlar, mikrofon, kullanım grafiği, son medya; kalan kullanım, sohbetteki görseller ve büyütme, boş bölmede sohbet arama,
 # sohbetler panosunda kenar çubuğu, ada göre sıralama, boş alanda sürükle-seç ve sağ tık menüsü,
 # ikinci açılışta tema/düşünme/Kontrol/sıralama/kenar çubuğu seçimlerinin geri gelmesi.
 set -e
@@ -23,7 +24,8 @@ def rep(f):
     return (json.loads(t[i+9:t.rfind('}')+1]) if i >= 0 else None), t
 r, t = rep(sys.argv[1]); r2, _ = rep(sys.argv[2]); win = sys.argv[3] == 'win'
 if not r: print('SELFTEST çıktısı yok\n' + t[-1500:]); sys.exit(1)
-s = {k: r.get(k) or {} for k in ['step1','step2','step3','step4','step5','step6','step7']}
+s = {k: r.get(k) or {} for k in ['step1','step2','step3','step4','step5','step6','step7','step8']}
+j = s['step8']
 h = s['step7']
 g = s['step6']; bm = g.get('sagTikMenu') or []; sm = g.get('kenarMenu') or []
 checks = [
@@ -52,11 +54,24 @@ checks = [
   ('sohbette görsel', h.get('mdGorsel') is True),
   ('büyütme: zoom + boş yere tık kapatır', h.get('lbGorselKucuk') and h.get('lbZoom') and h.get('lbBosTikKapandi')),
   ('boş bölmede sohbet arama', h.get('bosAramaVar') and (h.get('bosAramaSonuc') or 0) > 0 and h.get('bosAramaOdak') and h.get('bosAramaAcildi')),
+  ('Yeni adı + çöp sağ tık boşalt', j.get('yeniAd') == 'Yeni' and j.get('copMenu') and j.get('copBos')),
+  ('klasör oku yalnızca görünür alt klasörde', j.get('okYok') and j.get('okVar')),
+  ('arama bölme düğmeleri + bölmede ara', j.get('aramaDugme') and j.get('swap')),
+  ('araç satırları tek satırda, açık kalır', (j.get('grup') or '').startswith('3 araç') and 'browser_batch ×2' in (j.get('grup') or '') and '1 hata' in (j.get('grup') or '') and j.get('grupAcik') and j.get('grupAcikKaldi')),
+  ('görev listesi + sonraki adım kartı', j.get('plan') == 'Görevler1/2✓AB' and j.get('kart')),
+  ('dosya yolu tıklanır + sağ tık menüsü', j.get('fpath') == 'Görseller/a.png' and j.get('yolMenu') == ['fpprev','fpopen','fpshow','fpcopy'] and j.get('yolOnizleme')),
+  ('sakin "Claude\'da da açık" + çatal kartı', j.get('baskaYer') == "Claude'da da açık" and 'canlı izleniyor' in (j.get('banner') or '') and j.get('catalKart') and j.get('cevapGitti')),
+  ('çalışırken köpek + mesaj sırası', j.get('kopek') and j.get('sirada') == 1 and j.get('siraKart') and j.get('siraGitti')),
+  ('dikkat sayacı', j.get('dikkat') is True),
+  ('Tab tamamlama + şablonlar', (j.get('hayalet') or '').startswith('/durDurum özeti'[0:4]) and j.get('tabSonra') == 'Şu ana kadar ne yaptın, ne kaldı? Kısa bir özet ver.' and j.get('sablonMenu') == 5 and j.get('sablonEklendi')),
+  ('mikrofon', j.get('mic') is True),
+  ('kullanım grafiği + tahmin', j.get('grafik') and any('biter' in x for x in (j.get('tahmin') or []))),
+  ('son medya', j.get('medya') is True),
   ('ikinci açılış', bool(r2) and (r2.get('step1') or {}).get('tema') == 'light' and (r2.get('step1') or {}).get('effort0') == 'xhigh' and (r2.get('step1') or {}).get('control0') is True and (r2.get('step1') or {}).get('sort') == 'date' and (r2.get('step1') or {}).get('side') is False),
   ('renderer hatası yok', not [l for l in t.splitlines() if l.startswith('[renderer]')] and 'error' not in r),
 ]
 for n, ok in checks: print(('✔ ' if ok else '✖ ') + n)
 bad = [n for n, ok in checks if not ok]
-if bad: print(json.dumps(r, ensure_ascii=False, indent=1)[:4000]); sys.exit(1)
+if bad: print(json.dumps({k: v for k, v in r.items() if k.startswith('step') or k == 'error'}, ensure_ascii=False)[-6000:]); sys.exit(1)
 print(f'{len(checks)}/{len(checks)} geçti ({"Windows taklidi" if win else "Mac"})')
 PY

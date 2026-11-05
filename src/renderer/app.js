@@ -1346,6 +1346,7 @@ document.addEventListener('click', e => {
   const mdl = t.closest('[data-model]'); if(mdl){ const r = mdl.getBoundingClientRect(); const s = sess(mdl.dataset.model); menu(r.left - 60, r.top - 160, `<div class="mh">Model</div>${MODELS.map(([k,l]) => `<button data-m="model" data-id="${s.id}" data-v="${k||''}">${(s.modelPick||null)===k?'✓ ':'&nbsp;&nbsp;&nbsp;'}${l}${k?'':' · '+esc(s.model)}</button>`).join('')}`); return; }
   const rpl = t.closest('[data-reply]'); if(rpl){ const s = sess(rpl.dataset.sid), i = S.panes.indexOf(s && s.id); const ta = i >= 0 && document.querySelector(`[data-ta="${i}"]`);
     if(ta){ ta.value = rpl.dataset.reply; s.inputDraft = ta.value; send(i); } else toast('Önce sohbeti bir bölmede aç'); return; }
+  const fsd = t.closest('[data-fsend]'); if(fsd){ const i = +fsd.dataset.i, fs = sess(S.panes[i]); if(fs) fs.askFork = false; send(i, fsd.dataset.fsend === 'fork' ? {fork:true} : {force:true}); return; }
   const fx = t.closest('[data-forkx]'); if(fx){ const s = sess(fx.dataset.forkx); if(s){ s.askFork = false; renderPanes(); } return; }
   const qd = t.closest('[data-qdel]'); if(qd){ const s = sess(qd.dataset.sid); if(s && s.queue){ s.queue.splice(+qd.dataset.qdel, 1); renderPanes(); } return; }
   const qc = t.closest('[data-qclear]'); if(qc){ const s = sess(qc.dataset.qclear); if(s){ s.queue = []; s.queuePaused = false; renderPanes(); } return; }
@@ -1879,8 +1880,8 @@ function forkCard(s, i){
   if(!s.askFork || s.run) return '';
   return `<div class="perm fork-card"><div class="perm-h">${ic('cols')}<b>Bu sohbet şu an başka yerde de açık</b></div>
     <div class="perm-d">Claude uygulamasında ya da bir terminalde bu sohbete yazılıyor. İkisi aynı anda yazarsa kayıtlar karışabilir; mesajın nereye gitsin?</div>
-    <div class="perm-acts"><button class="btn pri" data-m="sendfork" data-i="${i}">${ic('cols')}Kopyasında devam et <span class="sub">önerilen · yeni sohbet</span></button>
-      <button class="btn" data-m="sendforce" data-i="${i}">${ic('up')}Yine de bu sohbete gönder</button><span class="grow"></span><button class="btn" data-forkx="${s.id}">Vazgeç</button></div></div>`;
+    <div class="perm-acts"><button class="btn pri" data-fsend="fork" data-i="${i}">${ic('cols')}Kopyasında devam et <span class="sub">önerilen · yeni sohbet</span></button>
+      <button class="btn" data-fsend="force" data-i="${i}">${ic('up')}Yine de bu sohbete gönder</button><span class="grow"></span><button class="btn" data-forkx="${s.id}">Vazgeç</button></div></div>`;
 }
 async function sendNow(s, text, att, opt = {}){
   const isNew = !!s.draft;
