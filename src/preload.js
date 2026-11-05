@@ -37,6 +37,7 @@ contextBridge.exposeInMainWorld('api', {
     pickFiles: cwd => ipcRenderer.invoke('dialog:pickFiles', cwd),
     describeFiles: paths => ipcRenderer.invoke('fs:describeFiles', paths),
     recentMedia: dir => ipcRenderer.invoke('fs:recentMedia', dir),
+    listFiles: (dir, query) => ipcRenderer.invoke('fs:listFiles', dir, query),
     pathForFile: file => { try { return webUtils.getPathForFile(file); } catch { return null; } },
   },
   claude: {
