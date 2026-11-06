@@ -2,7 +2,7 @@
 // Testler için sahte `claude` CLI: stream-json olaylarını ve izin (control_request) protokolünü
 // gerçek CLI'ye benzer sırayla üretir. Ortam değişkenleri:
 //   FAKE_DELAY=ms  FAKE_PERM=1 (Bash için izin ister)  FAKE_ASK=1 (AskUserQuestion)  FAKE_AUTH_FAIL=1  FAKE_LOGGED_OUT=1
-//   FAKE_SCENARIO=gorunum: düşünme, TodoWrite, alt ajan (parent_tool_use_id) ve arka plan Bash görevleri (stop_task ile durur;
+//   FAKE_SCENARIO=gorunum (ya da mesajda [gorunum]): düşünme, TodoWrite, alt ajan (parent_tool_use_id) ve arka plan Bash görevleri (stop_task ile durur;
 //   FAKE_BG_MS sonra kendiliğinden biter)
 const crypto = require('crypto');
 const args = process.argv.slice(2);
@@ -62,7 +62,7 @@ async function turn(msg) {
   // Gerçek CLI her turda kalan kullanımı bildirir
   out({ type: 'rate_limit_event', session_id: sid, rate_limit_info: { status: 'allowed', resetsAt: Math.floor(Date.now() / 1000) + 3 * 86400, rateLimitType: 'seven_day', unifiedWindows: { seven_day: { utilization: 0.73, resetsAt: Math.floor(Date.now() / 1000) + 3 * 86400 }, five_hour: { utilization: 0.2, resetsAt: Math.floor(Date.now() / 1000) + 7200 } } } });
   await wait(delay);
-  if (process.env.FAKE_SCENARIO === 'gorunum') await scenario();
+  if (process.env.FAKE_SCENARIO === 'gorunum' || text.includes('[gorunum]')) await scenario();
   if (process.env.FAKE_ASK) {
     const input = { questions: [{ question: 'Hangi rengi kullanalım?', header: 'Renk', multiSelect: false, options: [{ label: 'Turuncu', description: 'Claude rengi' }, { label: 'Mavi', description: 'klasik' }] }] };
     out({ type: 'assistant', session_id: sid, message: { content: [{ type: 'tool_use', id: 'ask1', name: 'AskUserQuestion', input }] } });
