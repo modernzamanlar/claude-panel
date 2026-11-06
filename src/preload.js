@@ -73,5 +73,6 @@ contextBridge.exposeInMainWorld('api', {
     dictate: () => ipcRenderer.invoke('app:dictate'),
   },
   platform: ((process.argv || []).find(a => a.startsWith('--cp-platform=')) || '').slice(14) || process.platform,
+  home: ((process.argv || []).find(a => a.startsWith('--cp-home=')) || '').slice(10),   // "~" ile yazılan medya yollarını tekilleştirmek için
   setTheme: (dark, look) => ipcRenderer.send('win:theme', !!dark, String(look || '')),
 });

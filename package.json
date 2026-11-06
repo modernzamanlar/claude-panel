@@ -15,7 +15,7 @@
     "dist:all": "npm run dist && npm run dist:win",
     "release:win": "npm run dist:win && node scripts/release-win.js",
     "release:mac": "npm run dist && node scripts/release-mac.js",
-    "test:cov": "node --test --experimental-test-coverage --test-coverage-include=src/main/media.js --test-coverage-include=src/renderer/complete.js --test-coverage-include=src/renderer/usage.js --test-coverage-include=src/renderer/markdown.js --test-coverage-include=src/renderer/annotate.js --test-coverage-include=src/main/annotate.js --test-coverage-include=src/main/macupdate.js --test-coverage-include=src/renderer/tema.js test/q-media.test.js test/q-complete.test.js test/q-usage.test.js test/q-markdown.test.js test/q-annotate.test.js test/q-annotate-main.test.js test/q-macupdate.test.js test/q-tema.test.js"
+    "test:cov": "node --test --experimental-test-coverage --test-coverage-include=src/main/media.js --test-coverage-include=src/renderer/complete.js --test-coverage-include=src/renderer/usage.js --test-coverage-include=src/renderer/markdown.js --test-coverage-include=src/renderer/annotate.js --test-coverage-include=src/main/annotate.js --test-coverage-include=src/main/macupdate.js --test-coverage-include=src/renderer/tema.js --test-coverage-include=src/renderer/mediapath.js --test-coverage-include=src/renderer/menupos.js test/q-media.test.js test/q-complete.test.js test/q-usage.test.js test/q-markdown.test.js test/q-annotate.test.js test/q-annotate-main.test.js test/q-macupdate.test.js test/q-tema.test.js test/q-mediapath.test.js test/q-menupos.test.js"
   },
   "author": "",
   "license": "UNLICENSED",

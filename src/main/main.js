@@ -86,7 +86,7 @@ function createWindow() {
       nodeIntegration: false,
       sandbox: true,
       // arayüz hangi platformda olduğunu buradan okur (CLAUDE_PANEL_UI_PLATFORM yalnızca test için)
-      additionalArguments: ['--cp-platform=' + (process.env.CLAUDE_PANEL_UI_PLATFORM || process.platform)],
+      additionalArguments: ['--cp-platform=' + (process.env.CLAUDE_PANEL_UI_PLATFORM || process.platform), '--cp-home=' + HOME],
     },
   });
   win.loadFile(path.join(__dirname, '..', 'renderer', 'index.html'));
