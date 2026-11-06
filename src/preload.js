@@ -59,6 +59,9 @@ contextBridge.exposeInMainWorld('api', {
       return () => ipcRenderer.removeListener('run:event', h);
     },
   },
+  screen: {
+    onStopped: cb => { const h = (_e, p) => cb(p); ipcRenderer.on('screen:stopped', h); return () => ipcRenderer.removeListener('screen:stopped', h); },
+  },
   search: {
     query: q => ipcRenderer.invoke('search:query', q),
     onProgress: cb => { const h = (_e, p) => cb(p); ipcRenderer.on('search:progress', h); return () => ipcRenderer.removeListener('search:progress', h); },

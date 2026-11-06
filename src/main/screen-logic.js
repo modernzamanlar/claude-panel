@@ -140,15 +140,16 @@ function validateWait(a) {
 // ---- Panel penceresi koruması ----
 /**
  * Panelin kendi penceresine tıklama/yazma reddedilir (Claude kendi "Durdur" ya da izin düğmesine basmasın).
- * hit: noktadaki en üst pencerenin kökü (Windows HWND, dize); fg: odaktaki pencere; panel: panel HWND'leri.
- * inPanelRect: hit bilinmiyorsa (ör. Mac) panel dikdörtgeni içinde mi.
+ * hit/hitPid: noktadaki en üst pencerenin kökü (Windows HWND, dize) ve süreci; panel: panel HWND'leri; pid: panelin ana süreci
+ * (panelin açtığı iletişim kutuları da aynı süreçtedir). inPanelRect: pencere bilinmiyorsa (ör. Mac) panel dikdörtgeni içinde mi.
  */
-function guardPoint({ hit, panel, inPanelRect }) {
-  if (hit != null) return (panel || []).includes(String(hit)) ? 'Bu nokta Claude Panel penceresinin üstünde; panelin kendisine tıklanamaz' : null;
-  return inPanelRect ? 'Bu nokta Claude Panel penceresinin üstünde; panelin kendisine tıklanamaz' : null;
+const ON_PANEL = 'Bu nokta Claude Panel penceresinin üstünde; panelin kendisine tıklanamaz';
+function guardPoint({ hit, hitPid, panel, pid, inPanelRect }) {
+  if (hit != null) return (panel || []).includes(String(hit)) || (pid != null && String(hitPid) === String(pid)) ? ON_PANEL : null;
+  return inPanelRect ? ON_PANEL : null;
 }
-function guardFocus({ fg, panel, panelFocused }) {
-  if (panelFocused || (fg != null && (panel || []).includes(String(fg)))) return 'Odak Claude Panel penceresinde; panele yazılamaz. Önce hedef pencereye tıkla.';
+function guardFocus({ fg, fgPid, panel, pid, panelFocused }) {
+  if (panelFocused || (fg != null && (panel || []).includes(String(fg))) || (pid != null && fgPid != null && String(fgPid) === String(pid))) return 'Odak Claude Panel penceresinde; panele yazılamaz. Önce hedef pencereye tıkla.';
   return null;
 }
 const inRect = (r, x, y) => !!r && x >= r.x && y >= r.y && x < r.x + r.width && y < r.y + r.height;

@@ -2364,6 +2364,7 @@ function menuAction({cmd, arg}){
   }
 }
 API.onMenu(menuAction);
+API.screen?.onStopped(p => toast(`Ekran kontrolü durduruldu (${p && p.shortcut || 'Ctrl+Alt+Esc'})`));
 
 
 // ---------- Windows/Linux: kısayol etiketlerini Ctrl/Alt/Shift'e çevir ----------
