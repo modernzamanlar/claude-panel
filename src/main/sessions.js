@@ -7,6 +7,10 @@ const path = require('path');
 const os = require('os');
 const crypto = require('crypto');
 const readline = require('readline');
+// Arayüzle ortak saf modüller (görev listesi, arka plan görevleri, alt ajanlar): ayrıştırma ve canlı akış aynı kodu kullanır
+const todos = require('../renderer/todos.js');
+const bgtasks = require('../renderer/bgtasks.js');
+const subagents = require('../renderer/subagents.js');
 
 const HOME = os.homedir();
 const PROJECTS_DIR = path.join(HOME, '.claude', 'projects');
