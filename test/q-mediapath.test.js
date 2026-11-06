@@ -4,8 +4,8 @@ const assert = require('node:assert');
 const MOD = require.resolve('../src/renderer/mediapath.js');
 const { clean, abs, key, uniq, isWin } = require(MOD);
 
-const WCWD = 'D:\\İşler\\Gürler Piliç\\3', WHOME = 'C:\\Users\\User';
-const PCWD = '/Users/yasin/İşler/Gürler Piliç/3', PHOME = '/Users/yasin';
+const WCWD = 'D:\\İşler\\Müşteri Ağaç\\3', WHOME = 'C:\\Users\\User';
+const PCWD = '/Users/yasin/İşler/Müşteri Ağaç/3', PHOME = '/Users/yasin';
 
 test('clean: file://, file:///C:, sondaki noktalama, boşluk; dize olmayan', () => {
   assert.strictEqual(clean('  file:///Users/a/b.mp4  '), '/Users/a/b.mp4');
@@ -42,9 +42,9 @@ test('abs: adres, mutlak, ~, göreli (Windows/POSIX), çözülemeyenler', () => 
 });
 
 test('key: Windows yazımları aynı anahtara iner (ayırıcı, harf, ~, ., .., sondaki nokta, UNC)', () => {
-  const k = key('D:\\İşler\\Gürler Piliç\\3\\01-isyeri.mp4');
-  for(const p of ['D:/İşler/Gürler Piliç/3/01-isyeri.mp4', 'd:\\İŞLER\\GÜRLER PILIÇ\\3\\01-ISYERI.MP4', 'D:\\İşler\\\\Gürler Piliç\\.\\3\\x\\..\\01-isyeri.mp4',
-    'D:\\İşler\\Gürler Piliç.\\3\\01-isyeri.mp4', 'D:\\İşler\\Gürler Piliç\\3\\01-isyeri.mp4'.normalize('NFD')]) assert.strictEqual(key(p), k, p);
+  const k = key('D:\\İşler\\Müşteri Ağaç\\3\\01-isyeri.mp4');
+  for(const p of ['D:/İşler/Müşteri Ağaç/3/01-isyeri.mp4', 'd:\\İŞLER\\MÜŞTERI AĞAÇ\\3\\01-ISYERI.MP4', 'D:\\İşler\\\\Müşteri Ağaç\\.\\3\\x\\..\\01-isyeri.mp4',
+    'D:\\İşler\\Müşteri Ağaç.\\3\\01-isyeri.mp4', 'D:\\İşler\\Müşteri Ağaç\\3\\01-isyeri.mp4'.normalize('NFD')]) assert.strictEqual(key(p), k, p);
   assert.strictEqual(key('~\\Desktop\\a.mp4', WHOME), key('c:/users/user/desktop/A.MP4'));
   assert.strictEqual(key('\\\\nas\\d\\a.mp4'), key('//nas/d/A.mp4'.replace(/\//g, '\\')));
   assert.strictEqual(key('\\\\nas\\d\\a.mp4'), '\\\\NAS\\D\\A.MP4');
@@ -67,15 +67,15 @@ test('key: POSIX harfe duyarlı; ayırıcı ve . / .. çözülür; adres olduğu
 });
 
 test('uniq: Windows — aynı videonun 5 yazımı tek öğe, ilk yazım korunur, sıra korunur', () => {
-  const cands = ['01-isyeri.mp4', 'D:\\İşler\\Gürler Piliç\\3\\01-isyeri.mp4', 'D:/İşler/Gürler Piliç/3/01-isyeri.mp4', 'd:\\İşLER\\gürler piliç\\3\\01-ISYERI.mp4.',
+  const cands = ['01-isyeri.mp4', 'D:\\İşler\\Müşteri Ağaç\\3\\01-isyeri.mp4', 'D:/İşler/Müşteri Ağaç/3/01-isyeri.mp4', 'd:\\İşLER\\müşteri ağaç\\3\\01-ISYERI.mp4.',
     './01-isyeri.mp4', '02.mp4', 'https://x.com/v.mp4', 'https://x.com/v.mp4', 'ffmpeg -i x.mp4'];
   assert.deepStrictEqual(uniq(cands, { cwd: WCWD, home: WHOME }), [WCWD + '\\01-isyeri.mp4', WCWD + '\\02.mp4', 'https://x.com/v.mp4']);
   assert.deepStrictEqual(uniq(new Set(cands), { cwd: WCWD, web: false }), [WCWD + '\\01-isyeri.mp4', WCWD + '\\02.mp4']);
 });
 
 test('uniq: POSIX — ~ ve mutlak aynı, harf farkı ayrı; sınır; skip; boş girdi', () => {
-  const cands = ['~/İşler/Gürler Piliç/3/a.mp4', PCWD + '/a.mp4', 'a.mp4', 'A.mp4'];
-  assert.deepStrictEqual(uniq(cands, { cwd: PCWD, home: PHOME }), ['/Users/yasin/İşler/Gürler Piliç/3/a.mp4', PCWD + '/A.mp4']);
+  const cands = ['~/İşler/Müşteri Ağaç/3/a.mp4', PCWD + '/a.mp4', 'a.mp4', 'A.mp4'];
+  assert.deepStrictEqual(uniq(cands, { cwd: PCWD, home: PHOME }), ['/Users/yasin/İşler/Müşteri Ağaç/3/a.mp4', PCWD + '/A.mp4']);
   assert.deepStrictEqual(uniq(['1.png', '2.png', '3.png'], { cwd: PCWD, limit: 2 }), [PCWD + '/1.png', PCWD + '/2.png']);
   assert.deepStrictEqual(uniq(['1.png', PCWD + '/2.png'], { cwd: PCWD, skip: new Set(['2.png', 'ffmpeg x']) }), [PCWD + '/1.png']);
   assert.deepStrictEqual(uniq(null), []);

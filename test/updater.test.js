@@ -8,7 +8,7 @@ const crypto = require('crypto');
 const { createUpdater, cmpVer, sha512, signManifest, verifyManifest } = require('../src/main/updater');
 const KP = crypto.generateKeyPairSync('ed25519');
 // platform: Windows'ta varsayılan kaynaklar gerçek NAS yollarıdır (V:…); testler yalnız kendi klasörlerini denesin
-const PLATFORM = 'darwin';
+const PLATFORM = 'linux'; // Windows akışı, varsayılan NAS kaynağı yok (darwin Mac akışını seçer)
 const PRIV = KP.privateKey.export({ type: 'pkcs8', format: 'pem' }), PUB = KP.publicKey.export({ type: 'spki', format: 'pem' });
 
 async function setup(version, { badHash = false, unsigned = false, forge = false } = {}) {
