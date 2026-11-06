@@ -14,7 +14,7 @@
     "dist:win": "electron-builder --win nsis --x64",
     "dist:all": "npm run dist && npm run dist:win",
     "release:win": "npm run dist:win && node scripts/release-win.js",
-    "test:cov": "node --test --experimental-test-coverage --test-coverage-include=src/main/media.js --test-coverage-include=src/renderer/complete.js --test-coverage-include=src/renderer/usage.js --test-coverage-include=src/renderer/markdown.js test/q-media.test.js test/q-complete.test.js test/q-usage.test.js test/q-markdown.test.js"
+    "test:cov": "node --test --experimental-test-coverage --test-coverage-include=src/main/media.js --test-coverage-include=src/renderer/complete.js --test-coverage-include=src/renderer/usage.js --test-coverage-include=src/renderer/markdown.js --test-coverage-include=src/renderer/claudecfg-core.js --test-coverage-include=src/main/claudecfg.js test/q-media.test.js test/q-complete.test.js test/q-usage.test.js test/q-markdown.test.js test/q-claudecfg-core.test.js test/q-claudecfg.test.js"
   },
   "author": "",
   "license": "UNLICENSED",
