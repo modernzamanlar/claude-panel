@@ -126,3 +126,117 @@ test('tarayıcıda window.ctxUsage olarak yüklenir', () => {
   assert.strictEqual(typeof window.ctxUsage.parse, 'function');
   assert.strictEqual(window.ctxUsage.parse(fx('context-haiku.json')).total, 31900);
 });
+
+// ---- Bilgi paneli görünümü, token/maliyet toplamları, sıkıştırma satırı ----
+const CU = require(MOD);
+
+test('fmtTok: kısa biçim; geçersiz değer tire', () => {
+  assert.strictEqual(CU.fmtTok(853), '853');
+  assert.strictEqual(CU.fmtTok(1000), '1k');
+  assert.strictEqual(CU.fmtTok(61500), '61.5k');
+  assert.strictEqual(CU.fmtTok(1e6), '1M');
+  assert.strictEqual(CU.fmtTok(1234567), '1.23M');
+  assert.strictEqual(CU.fmtTok(12.5e6), '12.5M');
+  assert.strictEqual(CU.fmtTok(20e6), '20M');
+  for (const bad of [null, undefined, -1, NaN, Infinity, '5']) assert.strictEqual(CU.fmtTok(bad), '—');
+});
+
+test('fmtUsd: 1 sentin altı 4 basamak, sıfır ve üstü 2 basamak; geçersiz tire', () => {
+  assert.strictEqual(CU.fmtUsd(0.0034), '$0.0034');
+  assert.strictEqual(CU.fmtUsd(0), '$0.00');
+  assert.strictEqual(CU.fmtUsd(1.236), '$1.24');
+  assert.strictEqual(CU.fmtUsd(null), '—');
+  assert.strictEqual(CU.fmtUsd(-2), '—');
+});
+
+test('view: güncel rapor varsa sayılar ve kategoriler rapordan; sıkıştırma payı dilim olarak eklenir', () => {
+  const r = parse(fx('context-opus-1m.json'));
+  const v = CU.view({ used: 5000, window: 200000, report: r, stale: false });
+  assert.strictEqual(v.src, 'report');
+  assert.strictEqual(v.used, r.total);
+  assert.strictEqual(v.window, 1000000);
+  assert.strictEqual(v.pct, Math.round(r.total / 1e6 * 100));
+  assert.strictEqual(v.free, r.free);
+  assert.strictEqual(v.buffer, r.buffer);
+  assert.ok(r.buffer > 0);
+  assert.deepStrictEqual(v.parts[v.parts.length - 1], { name: 'Autocompact buffer', label: 'Sıkıştırma payı', tokens: r.buffer });
+  assert.ok(v.parts.every(p => !/deferred/i.test(p.name)));
+  assert.ok(v.deferred.length > 0 && v.deferred.every(p => /deferred/i.test(p.name) && p.label.startsWith('Ertelenmiş')));
+  assert.strictEqual(v.memory, r.memory);
+});
+
+test('view: rapor eskiyse kullanılan son yanıttan, kategoriler eski rapordan; payı olmayan rapor', () => {
+  const r = { ...parse(fx('context-opus-1m.json')), buffer: 0 };
+  const v = CU.view({ used: 90000, window: null, report: r, stale: true });
+  assert.strictEqual(v.src, 'usage');
+  assert.strictEqual(v.used, 90000);
+  assert.strictEqual(v.window, 1000000);
+  assert.strictEqual(v.pct, 9);
+  assert.ok(v.parts.every(p => p.name !== 'Autocompact buffer'));
+  const v2 = CU.view({ used: 0, report: r, stale: true });
+  assert.strictEqual(v2.used, null); assert.strictEqual(v2.pct, null); assert.strictEqual(v2.src, null);
+  const v3 = CU.view({ used: 10, report: { ...r, window: null }, stale: true, window: 100 });
+  assert.strictEqual(v3.window, 100); assert.strictEqual(v3.pct, 10);
+});
+
+test('view: rapor yoksa kullanılan + pencereden boş alan; pencere yoksa yüzde ve boş alan bilinmiyor; hiç veri yoksa null', () => {
+  const v = CU.view({ used: 50000, window: 200000, report: null });
+  assert.deepStrictEqual(v, { used: 50000, window: 200000, pct: 25, src: 'usage', parts: null, deferred: [], free: 150000, buffer: 0, memory: null });
+  const v2 = CU.view({ used: 50000, window: 0 });
+  assert.strictEqual(v2.window, null); assert.strictEqual(v2.pct, null); assert.strictEqual(v2.free, null);
+  const v3 = CU.view({ used: 300000, window: 200000 });
+  assert.strictEqual(v3.free, 0);
+  for (const o of [null, undefined, {}, { used: -1, window: 'x' }]) {
+    const e = CU.view(o);
+    assert.deepStrictEqual([e.used, e.window, e.pct, e.src, e.parts, e.free], [null, null, null, null, null, null]);
+  }
+});
+
+test('liveAdd: aynı message.id bir kez sayılır; kimliksiz mesaj her seferinde; usage yoksa ve <synthetic> atlanır', () => {
+  const m = { id: 'msg_1', model: 'claude-opus-5-5', usage: { input_tokens: 5, output_tokens: 20, cache_read_input_tokens: 42000, cache_creation_input_tokens: 100 } };
+  let a = CU.liveAdd(null, m);
+  a = CU.liveAdd(a, m);
+  assert.deepStrictEqual(a, { ids: ['msg_1'], input: 5, output: 20, cacheRead: 42000, cacheCreate: 100 });
+  a = CU.liveAdd(a, { usage: { input_tokens: 1, output_tokens: 'x' } });
+  a = CU.liveAdd(a, { usage: { input_tokens: 1 } });
+  assert.strictEqual(a.input, 7); assert.strictEqual(a.output, 20);
+  const b = CU.liveAdd(a, { id: 'msg_s', model: '<synthetic>', usage: { input_tokens: 99 } });
+  assert.strictEqual(b, a); assert.strictEqual(b.input, 7);
+  assert.strictEqual(CU.liveAdd(a, { usage: 'bozuk' }), a);
+  assert.strictEqual(CU.liveAdd(a, null), a);
+  assert.deepStrictEqual(CU.liveAdd(undefined, {}), { ids: [], input: 0, output: 0, cacheRead: 0, cacheCreate: 0 });
+});
+
+test('tokenTotals: kayıt + canlı tur; biri yoksa diğeri; ikisi de yoksa null; bozuk alanlar 0', () => {
+  const st = { tokens: { input: 10, output: 20, cacheRead: 30, cacheCreate: 40 } };
+  assert.deepStrictEqual(CU.tokenTotals(st, { input: 1, output: 2, cacheRead: 3, cacheCreate: 4 }), { input: 11, output: 22, cacheRead: 33, cacheCreate: 44, total: 110 });
+  assert.deepStrictEqual(CU.tokenTotals(st, null), { input: 10, output: 20, cacheRead: 30, cacheCreate: 40, total: 100 });
+  assert.deepStrictEqual(CU.tokenTotals(null, { input: 1, output: 'x' }), { input: 1, output: 0, cacheRead: 0, cacheCreate: 0, total: 1 });
+  assert.deepStrictEqual(CU.tokenTotals({ tokens: { input: 'x' } }, null), { input: 0, output: 0, cacheRead: 0, cacheCreate: 0, total: 0 });
+  assert.strictEqual(CU.tokenTotals({}, null), null);
+  assert.strictEqual(CU.tokenTotals(null, null), null);
+});
+
+test('costView: kayıt ve panel sayacından büyük olan (daha yeni) seçilir; kaynak ve bilinmeyen model bayrağı', () => {
+  assert.deepStrictEqual(CU.costView(null, null), { usd: null, src: null, unknownModel: false });
+  assert.deepStrictEqual(CU.costView({ cost: 'x' }, { usd: NaN }), { usd: null, src: null, unknownModel: false });
+  assert.deepStrictEqual(CU.costView({ cost: 0.5, costUnknown: true }, null), { usd: 0.5, src: 'record', unknownModel: true, withOutside: true });
+  assert.deepStrictEqual(CU.costView({ cost: 0.5 }, { usd: 0.7 }), { usd: 0.7, src: 'panel', unknownModel: false, withOutside: true });
+  assert.deepStrictEqual(CU.costView({ cost: 0.5 }, { usd: 0.5 }), { usd: 0.5, src: 'record', unknownModel: false, withOutside: true });
+  assert.deepStrictEqual(CU.costView(null, { usd: 0.01 }), { usd: 0.01, src: 'panel', unknownModel: false, withOutside: false });
+});
+
+test('compactOf: akış (snake_case) ve kayıt (camelCase) biçimi; eksik alanlar null, tetikleyici varsayılanı elle', () => {
+  assert.deepStrictEqual(CU.compactOf({ timestamp: 'T', compact_metadata: { trigger: 'auto', pre_tokens: 168000, post_tokens: 21000 } }), { trigger: 'auto', pre: 168000, post: 21000, ts: 'T' });
+  assert.deepStrictEqual(CU.compactOf({ timestamp: 'T', compactMetadata: { trigger: 'manual', preTokens: 49224, postTokens: 16017 } }), { trigger: 'manual', pre: 49224, post: 16017, ts: 'T' });
+  assert.deepStrictEqual(CU.compactOf({ compact_metadata: { trigger: 'x', pre_tokens: 'a' } }, 0), { trigger: 'manual', pre: null, post: null, ts: new Date(0).toISOString() });
+  assert.deepStrictEqual(CU.compactOf(null, 0), { trigger: 'manual', pre: null, post: null, ts: new Date(0).toISOString() });
+  assert.strictEqual(typeof CU.compactOf({}).ts, 'string');
+});
+
+test('compactText: tetikleyici ve boyut; yalnızca önce boyutu; boyut yok', () => {
+  assert.strictEqual(CU.compactText({ trigger: 'auto', pre: 168000, post: 21000 }), 'Sohbet sıkıştırıldı (otomatik) · 168k → 21k token');
+  assert.strictEqual(CU.compactText({ trigger: 'manual', pre: 49224, post: null }), 'Sohbet sıkıştırıldı (elle) · önce 49.2k token');
+  assert.strictEqual(CU.compactText({ trigger: 'manual', pre: null, post: 5 }), 'Sohbet sıkıştırıldı (elle)');
+  assert.strictEqual(CU.compactText(null), 'Sohbet sıkıştırıldı (elle)');
+});
