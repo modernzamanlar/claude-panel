@@ -44,7 +44,8 @@ test('tarama: gizli/derleme/sistem klasörleri ve çöp dosyalar atlanır, gizli
   fs.rmSync(d, { recursive: true });
 });
 
-test('tarama: bağlantıların içine girilmez; kırık bağlantı ve okunamayan klasör sorun çıkarmaz', async () => {
+// Windows'ta sembolik bağlantı yönetici/geliştirici modu ister, chmod 0 da okumayı engellemez
+test('tarama: bağlantıların içine girilmez; kırık bağlantı ve okunamayan klasör sorun çıkarmaz', { skip: process.platform === 'win32' && 'Windows: symlink/chmod POSIX varsayımı' }, async () => {
   const d = tmp(), out = tmp();
   put(out, 'icerde.txt'); put(d, 'gercek.txt'); put(d, 'kilitli/gizli.txt');
   fs.symlinkSync(out, path.join(d, 'disari'));
@@ -189,4 +190,35 @@ test('mention.format + apply: boşluklu yol tırnaklanır, klasörde öneri sür
   assert.deepStrictEqual(r3, { text: '@"alt klasör/bos luk.txt" ', caret: 26 });
   assert.strictEqual(mention.token(r3.text, r3.caret), null, 'dosyadan sonra öneri kapanır');
   assert.strictEqual(globalThis.mention, mention);
+});
+
+test('tarama (Windows): bağlantı noktalarının (junction) içine girilmez; kırık bağlantı sorun çıkarmaz', { skip: process.platform !== 'win32' }, async () => {
+  const d = tmp(), out = tmp(), gone = tmp();
+  put(out, 'icerde.txt'); put(d, 'gercek.txt');
+  fs.symlinkSync(out, path.join(d, 'disari'), 'junction');
+  fs.symlinkSync(gone, path.join(d, 'kirik'), 'junction'); fs.rmSync(gone, { recursive: true });
+  const by = Object.fromEntries((await listFiles(d, '', { limit: 100 })).map(x => [x.rel, x.dir]));
+  assert.deepStrictEqual(by, { 'gercek.txt': false, 'disari': true, 'kirik': false });
+  fs.rmSync(d, { recursive: true }); fs.rmSync(out, { recursive: true });
+});
+
+test('gitignore: kökteki .gitignore kalıpları taramada atlanır', async () => {
+  const ig = files.gitignore('# yorum\n\n!geri-alma\n*.log\nbuild-out/\n/kokte.txt\ndocs/taslak\n**/gecici\n/\na/**/b\n');
+  assert.strictEqual(ig('x.log', false), true);
+  assert.strictEqual(ig('src/derin/y.log', false), true, 'eğik çizgisiz kalıp her düzeyde ad eşler');
+  assert.strictEqual(ig('build-out', true), true);
+  assert.strictEqual(ig('build-out', false), false, '"/" ile biten kalıp yalnız klasör');
+  assert.strictEqual(ig('kokte.txt', false), true);
+  assert.strictEqual(ig('src/kokte.txt', false), false, '"/" ile başlayan kalıp köke bağlı');
+  assert.strictEqual(ig('docs/taslak', true), true);
+  assert.strictEqual(ig('x/docs/taslak', true), false);
+  assert.strictEqual(ig('src/gecici', true), true, '"**/" öneki atılır');
+  assert.strictEqual(ig('geri-alma', false), false);
+  assert.strictEqual(ig('a/c/b', false), false, '"**" ortada desteklenmez, yoksayılır');
+  assert.strictEqual(files.gitignore(null)('a', false), false);
+  const d = tmp();
+  put(d, '.gitignore', 'gizli-klasor/\n*.tmp\n');
+  for (const r of ['src/a.js', 'src/b.tmp', 'gizli-klasor/c.js', 'kalan.txt']) put(d, r);
+  assert.deepStrictEqual(rels(await listFiles(d, '', { limit: 100 })).sort(), ['.gitignore', 'kalan.txt', 'src/', 'src/a.js']);
+  fs.rmSync(d, { recursive: true });
 });

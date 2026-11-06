@@ -31,9 +31,28 @@ function resolveDir(dir) {
   try { return fs.statSync(dir).isDirectory() ? path.resolve(dir) : null; } catch { return null; }
 }
 
+// Kök klasördeki .gitignore'un basit kalıpları → (rel, dir) => atlanır mı. Desteklenen: "ad", "*.log", "klasör/",
+// "/kökteki", "a/b" (köke göre), "**/" öneki. "!" ile geri alma ve iç içe .gitignore dosyaları desteklenmez (yoksayılır).
+function gitignore(text) {
+  const rules = [];
+  for (let line of String(text || '').split(/\r?\n/).slice(0, 500)) {
+    line = line.replace(/\s+$/, '');
+    if (!line || line[0] === '#' || line[0] === '!') continue;
+    const dirOnly = line.endsWith('/'); if (dirOnly) line = line.slice(0, -1);
+    line = line.replace(/^(\*\*\/)+/, '');
+    const anchored = line.startsWith('/') || line.includes('/'); line = line.replace(/^\//, '');
+    if (!line || line.includes('**')) continue;
+    const re = new RegExp('^' + line.replace(/[.+^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '[^/]*').replace(/\?/g, '[^/]') + '$');
+    rules.push({ re, dirOnly, anchored });
+  }
+  return (rel, dir) => rules.some(r => (!r.dirOnly || dir) && r.re.test(r.anchored ? rel : rel.slice(rel.lastIndexOf('/') + 1)));
+}
+
 // Genişlik öncelikli tarama: üst düzeydekiler sınırlara takılmadan önce toplanır
 async function walk(root, opt) {
   const items = [], queue = [['', 0]], end = Date.now() + opt.maxMs;
+  let ign = () => false;
+  try { ign = gitignore(await fs.promises.readFile(path.join(root, '.gitignore'), 'utf8')); } catch {}
   for (let k = 0; k < queue.length && items.length < opt.maxEntries && (k === 0 || Date.now() < end); k++) {
     const [rel, depth] = queue[k];
     let ents;
@@ -44,7 +63,9 @@ async function walk(root, opt) {
       if (items.length + pick.length >= opt.maxEntries) break;
       const dir = e.isDirectory();
       if (dir ? skipDir(e.name) : SKIP_FILES.has(e.name.toLowerCase())) continue;
-      pick.push({ e, dir, r: rel ? rel + '/' + e.name : e.name });
+      const r = rel ? rel + '/' + e.name : e.name;
+      if (ign(r, dir)) continue;
+      pick.push({ e, dir, r });
     }
     await Promise.all(pick.map(async p => {
       let st = null;
@@ -121,4 +142,4 @@ async function listFiles(dir, query, opts) {
 
 const clearCache = () => cache.clear();
 
-module.exports = { listFiles, rank, norm, resolveDir, clearCache, SKIP_DIRS };
+module.exports = { listFiles, rank, norm, resolveDir, clearCache, gitignore, SKIP_DIRS };

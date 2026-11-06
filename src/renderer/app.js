@@ -849,7 +849,7 @@ function paneParts(i){
       ${s.remote?`<span class="rc-badge" title="Uzaktan Kontrol açık">${ic('cursor')}<span>Uzaktan</span></span>`:''}${st}<button class="ibtn" data-swap="${i}" title="Bu bölmede başka bir sohbet aç (ara)">${ic('search')}</button><button class="ibtn" data-more="${s.id}">${ic('more')}</button><button class="ibtn" data-close="${i}" title="Bölmeyi kapat">${ic('x')}</button>`,
     banner: s.status==='elsewhere' && !s.run ? `<div class="banner info"><span class="sd"></span>Claude uygulamasında da açık · canlı izleniyor</div>` : '',
     top: forkCard(s, i) + permCard(s) + queueCard(s) + authBanner(), att: attachChips(s),
-    ph: s.draft ? 'İlk mesajını yaz — sohbet '+s.project.split(/[\\/]/).pop()+' klasöründe başlayacak' : s.run ? 'Sıraya almak için yaz ve Enter — tur bitince gönderilir' : 'Yanıtla…  ( / şablon · Tab tamamlar )',
+    ph: s.draft ? 'İlk mesajını yaz — sohbet '+s.project.split(/[\\/]/).pop()+' klasöründe başlayacak' : s.run ? 'Sıraya almak için yaz ve Enter — tur bitince gönderilir' : 'Yanıtla…  ( / şablon ve komut · @ dosya · ↑ önceki mesaj · Tab tamamlar )',
     dis: !!(S.auth && !S.auth.loggedIn),
     row:`<button class="ibtn" data-attach="${i}" title="Dosya veya görsel ekle (sürükle-bırak ve yapıştır da olur)">${ic('clip')}</button>
         <button class="ibtn" data-tpl="${i}" title="Şablonlar (yazarken / ile de açılır, Tab tamamlar)">${ic('bolt')}</button>
@@ -876,7 +876,7 @@ function paneShell(i, P){
 function keepFocus(el, fn){
   const a = document.activeElement;
   if(!a || a === document.body || !el.contains(a)) return fn();
-  const k = ['data-ta','data-permmsg','data-qfree'].find(x => a.hasAttribute(x));
+  const k = ['data-ta','data-permmsg','data-qfree','data-qedtext'].find(x => a.hasAttribute(x));
   const v = a.value, st = a.selectionStart, en = a.selectionEnd;
   fn();
   if(!k) return;
@@ -1349,7 +1349,8 @@ document.addEventListener('click', e => {
   const fsd = t.closest('[data-fsend]'); if(fsd){ const i = +fsd.dataset.i, fs = sess(S.panes[i]); if(fs) fs.askFork = false; send(i, fsd.dataset.fsend === 'fork' ? {fork:true} : {force:true}); return; }
   const fx = t.closest('[data-forkx]'); if(fx){ const s = sess(fx.dataset.forkx); if(s){ s.askFork = false; renderPanes(); } return; }
   const qd = t.closest('[data-qdel]'); if(qd){ const s = sess(qd.dataset.sid); if(s && s.queue){ s.queue.splice(+qd.dataset.qdel, 1); renderPanes(); } return; }
-  const qc = t.closest('[data-qclear]'); if(qc){ const s = sess(qc.dataset.qclear); if(s){ s.queue = []; s.queuePaused = false; renderPanes(); } return; }
+  const qc = t.closest('[data-qclear]'); if(qc){ const s = sess(qc.dataset.qclear); if(s){ s.queue = []; s.queuePaused = false; s.qEdit = null; renderPanes(); } return; }
+  const qa = t.closest('[data-qact]'); if(qa){ composerUI.queueAct(qa); return; }
   const qr = t.closest('[data-qresume]'); if(qr){ const s = sess(qr.dataset.qresume); if(s){ s.queuePaused = false; renderPanes(); runQueue(s); } return; }
   const mc = t.closest('[data-mic]'); if(mc){ dictate(+mc.dataset.mic); return; }
   const tp = t.closest('[data-tpl]'); if(tp){ const r = tp.getBoundingClientRect(); tplMenu(+tp.dataset.tpl, r.left, r.top - 60 - templates().length * 32); return; }
@@ -1399,9 +1400,7 @@ document.addEventListener('keydown', e => {
     if(e.key==='Escape'){ renaming=null; renderBoard(); }
     e.stopPropagation(); return;
   }
-  if(e.target.matches('[data-ta]') && e.key==='Tab' && !e.shiftKey && e.target._sug){ e.preventDefault(); acceptGhost(e.target); return; }
-  if(e.target.matches('[data-ta]') && e.key==='Escape' && e.target._sug){ e.preventDefault(); e.stopPropagation(); e.target._sug = null; e.target.parentElement.querySelector('.ghost').innerHTML = ''; e.target.dataset.noghost = e.target.value; return; }
-  if(e.target.matches('[data-ta]') && e.key==='Enter' && !e.shiftKey){ e.preventDefault(); send(+e.target.dataset.ta); return; }
+  // Yazma kutusunun tuşları (Tab/Esc hayalet, Enter gönder, / menüsü, @ dosya, ↑↓ geçmiş): composer.js'teki tek yönlendirici
   if(NC){ if(e.target.id==='ncTitle' && e.key==='Enter' && !MOD(e)){ e.preventDefault(); if(NC.dir) $('#ncText')?.focus(); else $('#ncDq')?.focus(); return; }
     if(e.key==='Escape'){ NC=null; renderNC(); } if(e.key==='Enter' && MOD(e)){ e.preventDefault(); startChat(); } return; }
   if(MOD(e) && !e.shiftKey && !e.altKey && e.key.toLowerCase()==='n'){ e.preventDefault(); newChat(); return; }
@@ -1867,14 +1866,16 @@ async function send(i, opt = {}){
 }
 // Sıradaki mesajı gönder (tur başarıyla bittiyse); hata/durdurmada sıra duraklar
 async function runQueue(s){
-  if(!s || s.run || s.queuePaused || !s.queue || !s.queue.length) return;
-  const q = s.queue.shift();
-  if(!(await sendNow(s, q.text, q.att, {force:true}))){ s.queue.unshift(q); s.queuePaused = true; renderPanes(); }
+  if(!s || s.run || s.queuePaused || s.qEdit || !s.queue || !s.queue.length) return; // düzenlenen mesaj varken beklenir
+  const q = s.queue.shift(), keep = s.attach || []; // yazma kutusunda bekleyen ekler sıradaki gönderimde kaybolmasın
+  const ok = await sendNow(s, q.text, q.att, {force:true});
+  if(keep.length) s.attach = [...keep, ...(s.attach || []).filter(a => !keep.includes(a))];
+  if(!ok){ s.queue.unshift(q); s.queuePaused = true; } if(!ok || keep.length) renderPanes();
 }
 function queueCard(s){
   if(!s.queue || !s.queue.length) return '';
-  return `<div class="queue"><div class="q-head">${ic('clock')}<b>Sırada ${s.queue.length} mesaj</b><span>${s.queuePaused ? 'duraklatıldı' : s.run ? 'bu tur bitince gönderilecek' : 'gönderiliyor'}</span><span class="grow"></span>${s.queuePaused ? `<button class="btn" data-qresume="${s.id}">Devam et</button>` : ''}<button class="btn" data-qclear="${s.id}">Sırayı temizle</button></div>
-    ${s.queue.map((q, k) => `<div class="q-row"><span class="q-k">${k+1}</span><span class="q-txt">${esc((q.text || '').slice(0, 200) || (q.att || []).map(a => a.name).join(', '))}</span><button class="ibtn" data-qdel="${k}" data-sid="${s.id}" title="Sıradan çıkar">${ic('x')}</button></div>`).join('')}</div>`;
+  return `<div class="queue"><div class="q-head">${ic('clock')}<b>Sırada ${s.queue.length} mesaj</b><span>${s.queuePaused ? 'duraklatıldı' : s.run ? 'bu tur bitince gönderilecek' : s.qEdit ? 'düzenleme bitince gönderilecek' : 'gönderiliyor'}</span><span class="grow"></span>${s.queuePaused ? `<button class="btn" data-qresume="${s.id}">Devam et</button>` : ''}<button class="btn" data-qclear="${s.id}">Sırayı temizle</button></div>
+    ${composerUI.queueRows(s)}</div>`;
 }
 function forkCard(s, i){
   if(!s.askFork || s.run) return '';
@@ -2002,6 +2003,7 @@ function onRun(p){
   const R = s.run, L = R.live;
   if(p.type === 'event'){
     const ev = p.ev;
+    if(window.composerUI && composerUI.onEvent(s, ev)){ scheduleLive(s); return; } // komut listesi, yerel komut çıktısı
     if(ev.type === 'system' && ev.subtype === 'init'){
       if(R.fork && ev.session_id && ev.session_id !== s.uuid) s = forkTo(s, ev.session_id);
       s.connectorsLive = ev.mcp_servers || []; if(ev.model) s.model = prettyModelR(ev.model);
@@ -2172,7 +2174,7 @@ function updateGhost(ta){
   const g = ta && ta.parentElement && ta.parentElement.querySelector('.ghost'); if(!g) return;
   const s = sess(S.panes[+ta.dataset.ta]);
   const atEnd = ta.selectionStart === ta.value.length && ta.selectionEnd === ta.value.length;
-  const sug = s && atEnd && document.activeElement === ta && !ta.disabled && !ta._mention && ta.dataset.noghost !== ta.value ? complete.suggest(ta.value, ghostSources(s)) : null;
+  const sug = s && atEnd && document.activeElement === ta && !ta.disabled && !ta._mention && !ta._slash && ta.dataset.noghost !== ta.value ? complete.suggest(ta.value, ghostSources(s)) : null;
   ta._sug = sug;
   if(!sug){ if(g.innerHTML) g.innerHTML = ''; return; }
   const cs = getComputedStyle(ta);

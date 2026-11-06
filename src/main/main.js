@@ -237,6 +237,8 @@ ipcMain.on('app:badge', (_e, n, icon, flash) => {
 ipcMain.on('app:focus', () => { if (!win || win.isDestroyed()) return; if (win.isMinimized()) win.restore(); win.show(); win.focus(); win.flashFrame(false); });
 ipcMain.handle('fs:recentMedia', (_e, dir) => recentMedia(dir));
 ipcMain.handle('fs:listFiles', (_e, dir, query) => require('./files').listFiles(dir, query));
+// "/" menüsü: skill ve özel komutlar (CLI'nin init olayı gelmeden önceki yedek kaynak; yalnız okur)
+ipcMain.handle('cmd:list', (_e, cwd) => require('./commands').scanCommands({ home: HOME, cwd: typeof cwd === 'string' ? expand(cwd) : null }));
 ipcMain.handle('app:dictate', () => new Promise(resolve => {
   const c = dictateCommand(process.platform); if (!c) return resolve({ ok: false, platform: process.platform });
   require('child_process').execFile(c.cmd, c.args, { windowsHide: true, timeout: 15000 }, err => resolve({ ok: !err, error: err ? String(err.message).slice(0, 200) : null }));

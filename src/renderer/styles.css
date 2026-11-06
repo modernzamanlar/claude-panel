@@ -723,6 +723,22 @@ body.lassoing, body.lassoing *{user-select:none !important}
 .q-row{display:flex;align-items:center;gap:8px;padding:3px 0 0 2px}
 .q-k{width:18px;height:18px;border-radius:50%;background:var(--hover);display:grid;place-items:center;font-size:11px;color:var(--muted);flex:none}
 .q-txt{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+/* "/" menüsü (composer.js; görünüm .mention-pop'tan) ve sıradaki mesajları düzenleme */
+.slash-pop{width:min(560px,calc(100vw - 16px));max-height:min(360px,55vh)}
+.slash-pop .mp-sec{padding:6px 9px 2px;font-size:10.5px;letter-spacing:.04em;text-transform:uppercase;color:var(--faint);font-weight:600}
+.slash-pop .mp-it span{flex:1;min-width:0}
+.slash-pop .sl-hint{font-style:normal;font-family:var(--mono);font-size:11px;color:var(--faint);flex:none;max-width:30%;overflow:hidden;text-overflow:ellipsis}
+.slash-pop .sl-src{font-style:normal;font-size:10.5px;color:var(--muted);border:1px solid var(--line2);border-radius:4px;padding:0 5px;flex:none}
+.q-txt[data-qact]{cursor:text}
+.q-acts{display:flex;gap:1px;flex:none}
+.q-acts .ibtn{width:24px;height:24px}
+.q-acts .ibtn[disabled]{opacity:.3;pointer-events:none}
+.i.flip{transform:rotate(180deg)}
+.q-att{display:inline-flex;align-items:center;gap:2px;color:var(--muted);font-size:11.5px;flex:none}
+.q-att .i{width:13px;height:13px}
+.q-edit{align-items:flex-start}
+.q-edit .q-ta{flex:1;min-width:0;resize:vertical;font:inherit;font-size:12.5px;padding:5px 8px;min-height:44px}
+.q-edit .btn{padding:3px 9px;font-size:12px}
 /* Başka yerde açık sohbete gönderme sorusu */
 .fork-card .btn .sub{font-size:11px;opacity:.75;margin-left:4px}
 .fork-card .perm-acts{align-items:center}

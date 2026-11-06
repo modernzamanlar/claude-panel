@@ -67,15 +67,16 @@
     check(ta); // klasörse içindekiler önerilir, dosyada belirteç biter ve pencere kapanır
   }
 
-  // Yakalama aşamasında: app.js'teki Tab (hayalet) ve Enter (gönder) işleyicilerinden önce çalışır
-  document.addEventListener('keydown', e => {
-    if (!MP || e.target !== MP.ta || e.isComposing || MP.el.hidden || e.shiftKey || e.altKey || e.ctrlKey || e.metaKey) return;
+  // Tuşlar composer.js'teki tek yönlendiriciden gelir (Tab hayaleti ve Enter göndermeden önce). İşlendiyse true.
+  function key(e) {
+    if (!MP || e.target !== MP.ta || e.isComposing || MP.el.hidden || e.shiftKey || e.altKey || e.ctrlKey || e.metaKey) return false;
     if (e.key === 'Escape') { MP.ta._mentionOff = MP.tok.start; close(); }
     else if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { const n = MP.items.length; MP.sel = (MP.sel + (e.key === 'ArrowDown' ? 1 : n - 1)) % n; paint(); }
     else if (e.key === 'Enter' || e.key === 'Tab') pick(MP.sel);
-    else return;
-    e.preventDefault(); e.stopPropagation();
-  }, true);
+    else return false;
+    return true;
+  }
+  window.mentionUI = { key, close };
   const isTa = t => t && t.matches && t.matches('[data-ta]');
   document.addEventListener('input', e => { if (isTa(e.target)) check(e.target); });
   document.addEventListener('keyup', e => { if (isTa(e.target) && /^(Arrow(Left|Right)|Home|End)$/.test(e.key)) check(e.target); });

@@ -60,6 +60,9 @@ contextBridge.exposeInMainWorld('api', {
       return () => ipcRenderer.removeListener('run:event', h);
     },
   },
+  cmd: {
+    list: cwd => ipcRenderer.invoke('cmd:list', cwd),
+  },
   search: {
     query: q => ipcRenderer.invoke('search:query', q),
     onProgress: cb => { const h = (_e, p) => cb(p); ipcRenderer.on('search:progress', h); return () => ipcRenderer.removeListener('search:progress', h); },
