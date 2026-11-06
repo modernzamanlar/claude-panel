@@ -28,7 +28,11 @@ const D = fs.mkdtempSync(path.join(os.tmpdir(), 'cp-uitest-'));
 // UITEST_SHOTS=<klasör> verilirse ekran görüntüleri silinmeden önce oraya kopyalanır
 const clean = () => {
   if (process.env.UITEST_SHOTS) try { fs.cpSync(path.join(D, 'out'), path.join(process.env.UITEST_SHOTS, M), { recursive: true }); } catch {}
-  try { fs.rmSync(D, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 }); } catch {} // Windows: kapanan süreç dosyayı kısa süre tutabilir
+  // Windows: Electron'un yardımcı süreçleri ana süreç kapandıktan sonra dosyaları birkaç saniye tutabilir (EBUSY/EPERM)
+  for (let k = 0; k < 30 && fs.existsSync(D); k++) {
+    try { fs.rmSync(D, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 }); } catch { Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 500); }
+  }
+  if (fs.existsSync(D)) console.log('Geçici klasör silinemedi: ' + D);
 };
 for (const d of ['home', 'mirror', 'out', 'ud']) fs.mkdirSync(path.join(D, d));
 // Her çalıştırmanın kendi Electron kullanıcı veri klasörü: aynı anda koşan testler (mac + win, başka dallar) kilitlenmesin
