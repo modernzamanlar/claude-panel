@@ -439,6 +439,7 @@ test('mesajlar: araçlar, sonuçlar, hatalar, görseller ve çıktılar', async 
   assert.deepStrictEqual(d.msgs[0], { r: 'u', t: 'ilk soru', ts: 'T1' });
   assert.deepStrictEqual(d.msgs[1], { r: 'a', ts: 'T2', b: [
     { t: 'text', v: 'Merhaba' },
+    { t: 'think', v: 'düşünce' }, // Ö16: metinli düşünme bloğu kayıttan okunur (arayüzde varsayılan gizli)
     { t: 'tool', n: 'Write', a: path.join('~', 'proje', 'a.txt'), o: 'ok', d: { e: [{ o: '', n: 'x' }] } },
     { t: 'tool', n: 'Read', a: '/oku.txt', o: 'hata\n[görsel]\n\n[Image: source: ' + shot + ']', err: true, imgs: [cachedPath('SONUC'), shot] },
     { t: 'tool', n: 'Bash', a: '', o: '' },
