@@ -72,5 +72,5 @@ contextBridge.exposeInMainWorld('api', {
   },
   platform: ((process.argv || []).find(a => a.startsWith('--cp-platform=')) || '').slice(14) || process.platform,
   home: ((process.argv || []).find(a => a.startsWith('--cp-home=')) || '').slice(10),   // "~" ile yazılan medya yollarını tekilleştirmek için
-  setTheme: dark =>ipcRenderer.send('win:theme', !!dark),
+  setTheme: dark => ipcRenderer.send('win:theme', !!dark),
 });

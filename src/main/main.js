@@ -277,7 +277,7 @@ function startWatcher() {
 function runSelftest() {
   const outDir = process.env.SELFTEST_OUT || os.tmpdir();
   win.webContents.on('console-message', (e, ...a) => { const lvl = e.level ?? a[0], msg = e.message ?? a[1]; if (lvl === 'warning' || lvl === 'error' || lvl >= 2) console.log('[renderer]', msg); });
-  console.log('DBG runSelftest'); win.webContents.once('did-finish-load', async () => { console.log('DBG loaded');
+  win.webContents.once('did-finish-load', async () => {
     await new Promise(r => setTimeout(r, 3500));
     const steps = (process.env.SELFTEST_STEPS || '').split('\n').filter(Boolean);
     const report = {};
@@ -285,7 +285,7 @@ function runSelftest() {
       report.state = await win.webContents.executeJavaScript('window.__selftest ? window.__selftest() : null');
       let i = 0;
       const shot = async name => { const img = await win.webContents.capturePage(); const f = path.join(outDir, `selftest-${name}.png`); fs.writeFileSync(f, img.toPNG()); return f; };
-      console.log('DBG state'); report.shots = [await shot('0-baslangic')]; console.log('DBG shot0');
+      report.shots = [await shot('0-baslangic')];
       for (const js of steps) {
         i++;
         report['step' + i] = await win.webContents.executeJavaScript(js);
