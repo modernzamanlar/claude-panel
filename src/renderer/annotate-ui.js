@@ -114,7 +114,7 @@
     closePop();
     if (E.st.tool === 'text') { e.preventDefault(); openText(e); return; }
     commitText(true);
-    E.cv.setPointerCapture && E.cv.setPointerCapture(e.pointerId);
+    try { E.cv.setPointerCapture(e.pointerId); } catch {} // tuvalden çıkınca da çizim sürsün
     A.begin(E.st, ptOf(e), kOf()); draw();
   }
   function onMove(e) { if (E && E.st.draft && A.move(E.st, ptOf(e))) drawSoon(); }
