@@ -10,6 +10,8 @@
 const RWM = window.rewind;
 ICON.rewind = '<path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/><path d="M12 8v4l3 2"/>';
 
+// Klasör seçici (UI testi bu işlevi değiştirerek yerel pencereyi açmadan dener)
+function rwPickFolder(){ return API.fs.pickFolder(); }
 const rwErr = e => String(e && e.message || e).replace(/^Error invoking remote method '[^']+': (Error: )?/, '');
 
 function userHTML(s, m, mi){
@@ -135,7 +137,7 @@ function dirsInfo(s){
     <div class="irow"><span style="width:16px"></span><button class="act" data-adadd="${s.id}" title="Claude'un bu sohbette erişebileceği ikinci bir klasör (claude --add-dir)">${ic('plus')}Ek klasör ekle…</button></div>`;
 }
 async function addDirTo(s){
-  const p = await API.fs.pickFolder(); if(!p || !s) return;
+  const p = await rwPickFolder(); if(!p || !s) return;
   const before = (s.dirs || []).length;
   s.dirs = RWM.dirsAdd(s.dirs, p, s.cwd || s.project);
   if(s.dirs.length === before){ toast((s.dirs || []).length >= 20 ? 'En çok 20 ek klasör eklenebilir' : 'Bu klasör zaten ekli'); return; }
@@ -168,7 +170,7 @@ function ncExtraHTML(){
     : !G.repo ? (/Git bulunamad/.test(G.error || '') ? `<div class="nc-wt sub">${esc(G.error)}</div>` : '')
     : `<label class="nc-wt"><input type="checkbox" id="ncWt" ${NC.wt ? 'checked' : ''}> Ayrı dalda (worktree) <span class="sub">· Claude bu git deposunun ayrı bir kopyasında, kendi dalında çalışır; asıl klasör değişmez</span></label>
       ${NC.wt ? `<div class="nc-wtb"><input id="ncWtName" class="inp mono" value="${esc(name)}" maxlength="64" spellcheck="false" autocomplete="off" aria-label="Worktree adı">
-        <div class="sub mono">${esc((G.root || '').replace(/[\\/]+$/, ''))}/.claude/worktrees/${esc(name)} · dal worktree-${esc(name)}</div>
+        <div class="sub mono">${esc(RWM.wtPath(G.root, name))} · dal worktree-${esc(name)}</div>
         ${bad ? `<div class="nc-err">${esc(bad)}</div>` : ''}</div>` : ''}`;
   return `${wt}<label class="fl">Ek klasörler <span>· isteğe bağlı — Claude bunlara da erişebilir (--add-dir)</span></label>
     <div class="nc-dirs">${NC.dirs.map(d => `<span class="nc-sel on" title="${esc(d)}">${ic('folderPlus')}<span>${esc(d)}</span><button class="ibtn" data-ncadx="${esc(d)}" title="Kaldır">${ic('x')}</button></span>`).join('')}
@@ -206,7 +208,7 @@ function rwClick(t){
   const ro = t.closest('[data-rworig]'); if(ro){ closeMenu(); if(sess(ro.dataset.rworig)){ const i = S.panes.indexOf(ro.dataset.rworig); i >= 0 ? (S.active = i, render()) : openIn(ro.dataset.rworig, S.active); } else toast('Asıl sohbet bulunamadı'); return true; }
   const aa = t.closest('[data-adadd]'); if(aa){ addDirTo(sess(aa.dataset.adadd)); return true; }
   const ax = t.closest('[data-adx]'); if(ax){ const s = sess(ax.dataset.sid); if(s){ s.dirs = RWM.dirsRemove(s.dirs, ax.dataset.adx); renderInfo(); persist(); toast('Ek klasör kaldırıldı · sonraki mesajdan itibaren'); } return true; }
-  if(NC && t.closest('[data-ncadd]')){ ncSync(); API.fs.pickFolder().then(p => { if(p && NC){ NC.dirs = RWM.dirsAdd(NC.dirs, p, NC.dir); renderNC(); } }); return true; }
+  if(NC && t.closest('[data-ncadd]')){ ncSync(); rwPickFolder().then(p => { if(p && NC){ NC.dirs = RWM.dirsAdd(NC.dirs, p, NC.dir); renderNC(); } }); return true; }
   const nx = NC && t.closest('[data-ncadx]'); if(nx){ ncSync(); NC.dirs = RWM.dirsRemove(NC.dirs, nx.dataset.ncadx); renderNC(); return true; }
   return false;
 }

@@ -80,10 +80,16 @@ test('validWt / wtName', () => {
   assert.equal(R.validWt(R.wtName('Çok güzel bir ad')), true);
 });
 
+test('wtPath: deponun ayracıyla, sondaki ayraç atılır', () => {
+  assert.equal(R.wtPath('C:\\p\\repo\\', 'ad'), 'C:\\p\\repo\\.claude\\worktrees\\ad');
+  assert.equal(R.wtPath('/u/repo', 'ad'), '/u/repo/.claude/worktrees/ad');
+  assert.equal(R.wtPath(null, 'ad'), '/.claude/worktrees/ad');
+});
+
 test('tarayıcıda window.rewind olarak yüklenir, module.exports olmadan', () => {
   const vm = require('vm'), MOD = require.resolve('../src/renderer/rewind.js'), src = require('fs').readFileSync(MOD, 'utf8');
   const ctx = { window: {} }; vm.createContext(ctx); vm.runInContext(src, ctx, { filename: MOD });
-  assert.deepEqual(Object.keys(ctx.window.rewind).sort(), ['canCode', 'canEdit', 'changeSummary', 'dirsAdd', 'dirsRemove', 'fileRows', 'forkTitle', 'target', 'validWt', 'wtName']);
+  assert.deepEqual(Object.keys(ctx.window.rewind).sort(), ['canCode', 'canEdit', 'changeSummary', 'dirsAdd', 'dirsRemove', 'fileRows', 'forkTitle', 'target', 'validWt', 'wtName', 'wtPath']);
   const ctx2 = { module: {} }; vm.createContext(ctx2); vm.runInContext(src, ctx2, { filename: MOD });
   assert.equal(typeof ctx2.rewind, 'object', 'window yoksa (ve module.exports boşsa) genel nesneye yazılır');
 });

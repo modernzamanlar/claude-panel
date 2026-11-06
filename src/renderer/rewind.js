@@ -49,6 +49,11 @@
     const d = new Date(now || Date.now()), p = v => String(v).padStart(2, '0');
     return `calisma-${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}`;
   }
-  const api = {canEdit, canCode, target, forkTitle, fileRows, changeSummary, dirsAdd, dirsRemove, validWt, wtName};
+  // Worktree yolu (CLI <depo>/.claude/worktrees/<ad> açar); ayraç deponun yolundaki gibi
+  function wtPath(root, name){
+    const r = String(root || '').replace(/[\\/]+$/, ''), sp = r.includes('\\') ? '\\' : '/';
+    return [r, '.claude', 'worktrees', name].join(sp);
+  }
+  const api = {canEdit, canCode, target, forkTitle, fileRows, changeSummary, dirsAdd, dirsRemove, validWt, wtName, wtPath};
   if(typeof module === 'object' && module.exports) module.exports = api; else root.rewind = api;
 })(typeof window !== 'undefined' ? window : this);

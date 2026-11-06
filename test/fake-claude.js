@@ -6,6 +6,7 @@
 //   Yanıt metni devam noktasının ilk 8 karakterini içerir: "(… noktasından)".
 // rewind_files kontrol isteği (kod geri sarma): FAKE_REWIND=<json dosyası> {"<kullanıcı mesajı uuid>": {"<mutlak yol>": "eski içerik"}}.
 //   Gerçek CLI gibi CLAUDE_CODE_ENABLE_SDK_FILE_CHECKPOINTING yoksa "File rewinding is not enabled." döner; dry_run dosya yazmaz.
+// --add-dir <klasör> (birden çok olabilir): yanıt metnine "(ek klasör: N)" eklenir.
 // --worktree <ad>: gerçek CLI gibi git deposu ister (.git yoksa çıkış 1), <cwd>/.claude/worktrees/<ad> klasörünü açar ve init'te o cwd'yi bildirir.
 const crypto = require('crypto');
 const args = process.argv.slice(2);
@@ -16,6 +17,7 @@ let sid = arg('--session-id') || arg('--resume') || crypto.randomUUID();
 if (args.includes('--fork-session')) sid = crypto.randomUUID();
 const at = arg('--resume-session-at');
 if (at && (!arg('--resume') || !args.includes('--fork-session'))) { console.error('--resume-session-at için --resume ve --fork-session gerekli'); process.exit(3); }
+const addDirs = args.flatMap((a, i) => (a === '--add-dir' && args[i + 1] ? [args[i + 1]] : []));
 const wt = arg('--worktree');
 let cwd = process.cwd();
 if (wt) {
@@ -75,7 +77,7 @@ async function turn(msg) {
     out({ type: 'result', subtype: 'success', is_error: true, result: 'Failed to authenticate', terminal_reason: 'api_error', session_id: sid });
     return process.exit(1);
   }
-  const reply = `Aldım: "${text.split('\n')[0]}"${images ? ` (+${images} görsel)` : ''}${at ? ` (${at.slice(0, 8)} noktasından)` : ''}. Panelden yazıyorum.`;
+  const reply = `Aldım: "${text.split('\n')[0]}"${images ? ` (+${images} görsel)` : ''}${at ? ` (${at.slice(0, 8)} noktasından)` : ''}${addDirs.length ? ` (ek klasör: ${addDirs.length})` : ''}. Panelden yazıyorum.`;
   out({ type: 'stream_event', session_id: sid, event: { type: 'content_block_start', index: 0, content_block: { type: 'text', text: '' } } });
   for (const part of reply.match(/.{1,6}/g)) { out({ type: 'stream_event', session_id: sid, event: { type: 'content_block_delta', index: 0, delta: { type: 'text_delta', text: part } } }); await wait(delay / 4); }
   out({ type: 'assistant', session_id: sid, message: { model: 'claude-opus-5-5', content: [{ type: 'text', text: reply }], usage: { input_tokens: 5, cache_read_input_tokens: 42000, output_tokens: 20 } } });
