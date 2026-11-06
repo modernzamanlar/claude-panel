@@ -12,7 +12,7 @@ const { createMirror } = require('./mirror');
 const { createUpdater } = require('./updater');
 const { SearchIndex } = require('./search');
 const { recentMedia, okBadgeIcon, dictateCommand } = require('./media');
-const { Runner, authStatus, openLoginTerminal, openRemoteTerminal, mcpList, controlStatus, installDesktop } = require('./runner');
+const { Runner, authStatus, openLoginTerminal, openRemoteTerminal, mcpList, contextUsage, controlStatus, installDesktop } = require('./runner');
 
 const SELFTEST = process.argv.includes('--selftest');
 const IS_MAC = process.platform === 'darwin';
@@ -223,6 +223,7 @@ ipcMain.handle('run:stopTask', (_e, runId, taskId) => runner.stopTask(runId, tas
 ipcMain.handle('run:respond', (_e, runId, requestId, response) => runner.respond(runId, requestId, response));
 ipcMain.handle('claude:remote', (_e, opts) => openRemoteTerminal(shell, opts));
 ipcMain.handle('claude:mcpList', (_e, cwd) => mcpList(cwd));
+ipcMain.handle('claude:context', (_e, o) => contextUsage(o && o.sessionId, o && o.cwd, { model: o && o.model }));
 ipcMain.handle('claude:control', () => controlStatus());
 ipcMain.handle('claude:installDesktop', () => installDesktop());
 // Ek: dosya seç / dosya yollarını tanımla (görseller base64 olarak okunur, en fazla 5 MB)

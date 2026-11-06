@@ -13,6 +13,7 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const crypto = require('crypto');
+const ctxUsage = require('../renderer/ctxusage');
 
 const HOME = os.homedir();
 // Yalnızca "~" ve "~/…" (Windows'ta "~\\…") genişletilir; "~kullanici" ya da "~yedek" gibi adlar olduğu gibi kalır
@@ -162,7 +163,7 @@ const winQuote = a => { a = String(a); if (CMD_UNSAFE.test(a)) throw new Error('
 // ---- Girdi doğrulama (renderer'dan gelen değerler ana süreçte yeniden denetlenir) ----
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const PERMISSION_MODES = new Set(['default', 'acceptEdits', 'bypassPermissions', 'plan', 'auto', 'dontAsk', 'manual']);
-const MODEL_RX = /^(opus|sonnet|haiku|default|claude-[a-z0-9.-]+(\[1m\])?)$/i;
+const MODEL_RX = /^((opus|sonnet|haiku|fable)(\[1m\])?|default|claude-[a-z0-9.-]+(\[1m\])?)$/i;
 const EFFORTS = new Set(['low', 'medium', 'high', 'xhigh', 'max']); // claude --effort
 function checkUuid(id) { if (!UUID.test(String(id))) throw new Error('Geçersiz oturum kimliği'); return String(id); }
 function checkDir(p) {
@@ -252,7 +253,7 @@ class Runner {
     this.runs = new Map();      // runId -> {proc, sessionId, ...}
   }
   /**
-   * opts: {runId, sessionId?, newSession?, fork?, cwd, text, model?, permissionMode?, effort?, control?}
+   * opts: {runId, sessionId?, newSession?, fork?, cwd, text, model?, permissionMode?, effort?, control?, fast?}
    * Dönüş: {runId, sessionId} — yeni sohbette sessionId önceden üretilir (--session-id).
    */
   async start(opts) {
@@ -264,6 +265,7 @@ class Runner {
     if (opts.model && !MODEL_RX.test(String(opts.model))) throw new Error('Geçersiz model: ' + opts.model);
     if (opts.permissionMode && !PERMISSION_MODES.has(opts.permissionMode)) throw new Error('Geçersiz izin modu: ' + opts.permissionMode);
     if (opts.effort && !EFFORTS.has(opts.effort)) throw new Error('Geçersiz düşünme seviyesi: ' + String(opts.effort).slice(0, 20));
+    if (opts.fast !== undefined && opts.fast !== null && typeof opts.fast !== 'boolean') throw new Error('Geçersiz hızlı mod değeri');
     const runId = opts.runId || crypto.randomUUID();
     const args = ['-p', '--input-format', 'stream-json', '--output-format', 'stream-json', '--verbose', '--include-partial-messages'];
     let sessionId = opts.sessionId;
@@ -272,6 +274,10 @@ class Runner {
     if (opts.model) args.push('--model', opts.model);
     if (opts.permissionMode) args.push('--permission-mode', opts.permissionMode);
     if (opts.effort) args.push('--effort', opts.effort);
+    // Hızlı mod: `--fast-mode on` CLI'nin bayrak ayarlarına fastMode:true yazar; başsız modda bu açık istek olmadan
+    // hızlı mod "sdk_opt_in_required" nedeniyle kapalı kalır (CLI 2.1.318'de denendi). Kullanılabilirliği hesap belirler;
+    // sonuç result.fast_mode_state / fast_mode_disabled_reason ile döner. Kapalıyken bayrak verilmez (CLI varsayılanı).
+    if (opts.fast === true) args.push('--fast-mode', 'on');
     if (opts.control) { // bilgisayar kontrolü: tarayıcı (Claude in Chrome) + varsa masaüstü (agent-desktop)
       args.push('--chrome');
       const ad = await desktopTool(env);
@@ -418,6 +424,27 @@ async function mcpList(cwd) {
   });
 }
 
+// Gerçek bağlam kullanımı: Claude Code'un /context komutu başsız modda yerel olarak çalışır (model çağrılmaz, num_turns 0).
+// --no-session-persistence ile oturumun .jsonl dosyasına hiçbir şey eklenmez (bu bayrak olmadan /context kayda yazılır).
+// Dönüş: {model, total, window, free, buffer, categories:[{name, tokens, deferred}], memory, at}
+async function contextUsage(sessionId, cwd, opts = {}) {
+  const id = checkUuid(sessionId);
+  const dir = checkDir(cwd);
+  if (opts.model && !MODEL_RX.test(String(opts.model))) throw new Error('Geçersiz model: ' + opts.model);
+  const bin = await claudeBin();
+  if (!bin) throw new Error('claude komutu bulunamadı');
+  const env = await loginEnv();
+  const args = ['-p', '/context', '--resume', id, '--no-session-persistence', '--output-format', 'json', ...(opts.model ? ['--model', opts.model] : [])];
+  return new Promise((resolve, reject) => {
+    const p = execClaude(bin, args, { env, cwd: dir, timeout: 60000, maxBuffer: 16 * 1024 * 1024 }, (err, out, errOut) => {
+      const r = ctxUsage.parse(String(out || ''));
+      if (r) resolve({ ...r, at: Date.now() });
+      else reject(new Error(String(errOut || (err && err.message) || '').trim().slice(-300) || 'Bağlam bilgisi okunamadı'));
+    });
+    try { p.stdin.end(); } catch {} // -p istemi argümanda; açık kalan stdin CLI'yi bekletmesin
+  });
+}
+
 // Testler için: bağımlılıklar ve önbellek sıfırlama
 const _test = { deps, winQuote, safeLabel, expand, reset(lp = null) { loginPathCache = lp; launchCache.clear(); } };
-module.exports = { Runner, authStatus, openLoginTerminal, openRemoteTerminal, mcpList, claudeBin, loginEnv, launchSpec, controlStatus, installDesktop, desktopMcp, _test };
+module.exports = { Runner, authStatus, openLoginTerminal, openRemoteTerminal, mcpList, contextUsage, claudeBin, loginEnv, launchSpec, controlStatus, installDesktop, desktopMcp, _test };

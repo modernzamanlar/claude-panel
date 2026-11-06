@@ -489,6 +489,27 @@ test('mesajlar: tur sınırı — tam sınırda kesilmez, aşınca son N tur kal
   assert.strictEqual(one.skipped, 2);
 });
 
+test('mesajlar: sıkıştırma satırı (r:"c"), sıkıştırma özeti gizlenir; kullanım özeti (stats) kayıttan', async () => {
+  const cb = { type: 'system', subtype: 'compact_boundary', timestamp: 'T2', compactMetadata: { trigger: 'auto', preTokens: 168000, postTokens: 21000 } };
+  const f = jsonl([user('soru'), asst([{ type: 'text', text: 'cevap' }], {}, { id: 'm1', usage: { input_tokens: 10, output_tokens: 5 } }),
+    asst([{ type: 'text', text: 'devam' }], {}, { id: 'm1', usage: { input_tokens: 10, output_tokens: 5 } }),
+    cb, user('This session is being continued…', { isCompactSummary: true }), { type: 'cost-state', totalCostUSD: 0.25 }]);
+  const r = await loadSession(f, 60);
+  assert.deepStrictEqual(r.msgs.map(m => m.r), ['u', 'a', 'c']); // aynı yanıtın satırları tek mesajda
+  assert.deepStrictEqual(r.msgs[2], { r: 'c', trigger: 'auto', pre: 168000, post: 21000, ts: 'T2' });
+  assert.strictEqual(r.turns, 1);
+  assert.deepStrictEqual(r.stats.tokens, { input: 10, output: 5, cacheRead: 0, cacheCreate: 0, total: 15 });
+  assert.strictEqual(r.stats.ctx, 21000);
+  assert.strictEqual(r.stats.cost, 0.25);
+  assert.strictEqual(r.stats.compacts, 1);
+  // özet: son yanıttan sonra sıkıştırıldıysa bağlam sıkıştırma sonrası boyuttur; sonra gelen yanıt yine geçerlidir
+  assert.strictEqual((await summarize(f)).ctxTokens, 21000);
+  const g = jsonl([user('x'), asst([], {}, { usage: { input_tokens: 9000 } }), { ...cb, compactMetadata: { trigger: 'manual' } }]);
+  assert.strictEqual((await summarize(g)).ctxTokens, 9000);
+  const h = jsonl([user('x'), cb, asst([], {}, { usage: { input_tokens: 30000 } })]);
+  assert.strictEqual((await summarize(h)).ctxTokens, 30000);
+});
+
 // ---------------- SessionIndex ----------------
 const projDir = name => { const d = path.join(S.PROJECTS_DIR, name); fs.mkdirSync(d, { recursive: true }); return d; };
 const idOf = n => '00000000-0000-0000-0000-' + String(n).padStart(12, '0');
