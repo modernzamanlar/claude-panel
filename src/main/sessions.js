@@ -251,22 +251,39 @@ function resultText(content) {
  * Ayrıca Write/Edit/NotebookEdit ile değiştirilen dosyaları "çıktılar" olarak toplar.
  */
 // Ayrıştırma durumu satır satır beslenir; tam okuma (loadSession) ve artımlı okuma (SessionLoader) aynı kodu kullanır.
-const newParse = () => ({ msgs: [], toolById: new Map(), outputs: new Map(), turns: 0 });
-function feedLine(st, line) {
+const newParse = () => ({ msgs: [], toolById: new Map(), outputs: new Map(), turns: 0, todo: todos.newState(), bg: bgtasks.newState() });
+const MAXTH = 20000; // tek düşünme bloğunda tutulan en çok karakter
+const NOTIF_RX = /^(\[SYSTEM NOTIFICATION[^\n]*\n[\s\S]*?)?<task-notification>/;
+// Arka plan görevi bildirimi (<task-notification>): görev listesini günceller; ilgili alt ajan bloğu da biter
+function feedNotif(st, text, ts) {
+  const n = bgtasks.notif(st.bg, text, ts); if (!n) return false;
+  const tool = n.tu && st.toolById.get(n.tu);
+  if (tool && tool.sa) subagents.onNotif(tool.sa, n);
+  return true;
+}
+function feedLine(st, line, side) {
   if (!line) return;
   let e; try { e = JSON.parse(line); } catch { return; }
-  if (!e || e.isSidechain) return; // "null" satırı da atlanır
+  if (!e || (e.isSidechain && !side)) return; // "null" satırı da atlanır; alt ajan dosyası okunurken (side) yan zincir satırları alınır
+  // Arka plan görevi bildirimleri kayıtta sıraya alınmış komut eki olarak durur
+  if (e.type === 'attachment' && e.attachment && e.attachment.type === 'queued_command' && typeof e.attachment.prompt === 'string') { feedNotif(st, e.attachment.prompt, e.timestamp); return; }
   if (e.type === 'user' && e.message) {
     const c = e.message.content;
     if (Array.isArray(c) && c.some(x => x.type === 'tool_result')) {
       for (const x of c) if (x.type === 'tool_result') {
         const tool = st.toolById.get(x.tool_use_id);
-        if (tool) { tool.o = resultText(x.content).slice(0, 1500); if (x.is_error) tool.err = true; const im = imagesOf(x.content); if (im.length) tool.imgs = im; }
+        const txt = resultText(x.content);
+        if (tool) { tool.o = txt.slice(0, 1500); if (x.is_error) tool.err = true; const im = imagesOf(x.content); if (im.length) tool.imgs = im;
+          if (tool.sa) subagents.onResult(tool.sa, e.toolUseResult, x.is_error); }
+        todos.result(st.todo, x.tool_use_id, txt, e.toolUseResult, x.is_error);
+        bgtasks.result(st.bg, x.tool_use_id, txt, e.toolUseResult, x.is_error, e.timestamp);
       }
       return;
     }
     if (e.isMeta) return;
     const t = userText(c);
+    // Yalnız CLI'nin kendi bildirimi (metin bildirimle başlar): kullanıcının yapıştırdığı metin görev sanılmaz
+    if (NOTIF_RX.test(t) && feedNotif(st, t, e.timestamp)) return;
     if (isNoise(t)) return;
     const um = { r: 'u', t: t.slice(0, 8000), ts: e.timestamp }; const uim = imagesOf(c); if (uim.length) um.imgs = uim;
     st.msgs.push(um);
@@ -278,9 +295,14 @@ function feedLine(st, line) {
     if (!last || last.r !== 'a') { last = { r: 'a', b: [], ts: e.timestamp }; st.msgs.push(last); }
     for (const c of e.message.content) {
       if (c.type === 'text' && c.text && c.text.trim()) last.b.push({ t: 'text', v: c.text });
+      // Düşünme: yalnızca metni kaydedilmişse (boş + signature olan bloklar gösterilmez)
+      else if (c.type === 'thinking' && typeof c.thinking === 'string' && c.thinking.trim()) last.b.push({ t: 'think', v: c.thinking.slice(0, MAXTH) });
       else if (c.type === 'tool_use') {
         const tool = { t: 'tool', n: c.name, a: toolSummary(c.name, c.input), o: '', id: c.id };
         const card = turnCard(c.name, c.input); if (card) Object.assign(tool, card);
+        const td = todos.apply(st.todo, c.name, c.input, c.id); if (td) tool.todo = td;
+        if (subagents.isAgentTool(c.name)) tool.sa = subagents.info(c.id, c.input);
+        bgtasks.use(st.bg, c.id, c.name, c.input, e.timestamp);
         last.b.push(tool); st.toolById.set(c.id, tool);
         const fp = c.input && (c.input.file_path || c.input.notebook_path);
         if (fp && /^(Write|Edit|MultiEdit|NotebookEdit)$/.test(c.name)) st.outputs.set(fp, { path: tilde(fp), tool: c.name, ts: e.timestamp });
@@ -299,8 +321,10 @@ function finishParse(st, limit) {
     list = list.slice(userAt[skipped]);
   }
   const msgs = list.filter(m => m.r === 'u' || m.b.length)
-    .map(m => m.r === 'a' ? { ...m, b: m.b.map(b => { if (b.t !== 'tool') return b; const { id, ...rest } = b; return rest; }) } : m);
-  return { msgs, skipped, turns: st.turns, outputs: [...st.outputs.values()].reverse() };
+    .map(m => m.r === 'a' ? { ...m, b: m.b.map(b => { if (b.t !== 'tool') return b; const { id, ...rest } = b; if (rest.sa) rest.sa = { ...rest.sa }; return rest; }) } : m);
+  // Alt ajan bilgisi (sa) ve görev listeleri kopyalanır: artımlı okumada durum sonradan değişse de gönderilen sonuç değişmez
+  return { msgs, skipped, turns: st.turns, outputs: [...st.outputs.values()].reverse(),
+    todo: st.todo.items.map(i => ({ ...i })), bg: st.bg.list.map(t => ({ ...t })) };
 }
 
 /**
@@ -313,6 +337,34 @@ async function loadSession(file, limit = 60) {
   const rl = readline.createInterface({ input: fs.createReadStream(file, { encoding: 'utf8' }), crlfDelay: Infinity });
   for await (const line of rl) feedLine(st, line);
   return finishParse(st, limit);
+}
+
+/**
+ * Alt ajanın kaydı: `<oturum>/subagents/agent-<agentId>.jsonl` (agentId Agent aracının sonucunda yazar). Kimlik
+ * bilinmiyorsa `agent-*.meta.json` içindeki toolUseId ile bulunur. Dönen: {b: alt ajanın metin/araç blokları, cut}
+ * ya da dosya yoksa null. Kimlikler yalnızca [\w-] karakterlerinden oluşabilir (yol geçişi olmasın).
+ */
+const SAFE_ID = /^[\w-]{1,80}$/;
+async function loadSubagent(sessionFile, toolId, agentId, max = subagents.MAXB) {
+  const dir = path.join(sessionFile.replace(/\.jsonl$/, ''), 'subagents');
+  let file = null;
+  if (agentId && SAFE_ID.test(agentId)) { const f = path.join(dir, 'agent-' + agentId + '.jsonl'); if (fs.existsSync(f)) file = f; }
+  if (!file && toolId && SAFE_ID.test(toolId)) {
+    let names = []; try { names = await fsp.readdir(dir); } catch { return null; }
+    for (const n of names) {
+      if (!/^agent-[\w-]+\.meta\.json$/.test(n)) continue;
+      let j; try { j = JSON.parse(await fsp.readFile(path.join(dir, n), 'utf8')); } catch { continue; }
+      if (j && j.toolUseId === toolId) { file = path.join(dir, n.replace(/\.meta\.json$/, '.jsonl')); break; }
+    }
+  }
+  if (!file || !fs.existsSync(file)) return null;
+  const st = newParse();
+  const rl = readline.createInterface({ input: fs.createReadStream(file, { encoding: 'utf8' }), crlfDelay: Infinity });
+  for await (const line of rl) feedLine(st, line, true);
+  const b = [];
+  for (const m of finishParse(st, Infinity).msgs) if (m.r === 'a') b.push(...m.b);
+  const cut = Math.max(0, b.length - max);
+  return { b: cut ? b.slice(cut) : b, cut };
 }
 
 /**
@@ -353,4 +405,4 @@ class SessionLoader {
   }
 }
 
-module.exports = { turnCard, SessionIndex, loadSession, SessionLoader, summarize, PROJECTS_DIR, tilde, makeTilde, prettyModel, imagesOf, pruneImages, IMG_DIR };
+module.exports = { turnCard, SessionIndex, loadSession, loadSubagent, SessionLoader, summarize, PROJECTS_DIR, tilde, makeTilde, prettyModel, imagesOf, pruneImages, IMG_DIR };

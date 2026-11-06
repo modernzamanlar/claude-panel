@@ -21,7 +21,7 @@
     let k = null;
     if (SHELL.test(name)) k = 'bash'; else if (name === 'Monitor') k = 'monitor'; else if (name === 'Agent' || name === 'Task') k = 'agent';
     if (!k) return false;
-    st.pend.set(id, { k, cmd: one(str(input.command, MAXC) || str(input.prompt, MAXC)), d: one(str(input.description, 160)), t0: ms(ts) });
+    st.pend.set(id, { k, cmd: k === 'agent' ? '' : one(str(input.command, MAXC)), d: one(str(input.description, 160)), t0: ms(ts) });
     return true;
   }
   // Sonuçtaki görev kimliği: toolUseResult alanları ya da CLI'nin sonuç metninin başı (komut çıktısındaki
