@@ -216,6 +216,8 @@ async function describeFiles(paths) {
   return out;
 }
 ipcMain.handle('fs:describeFiles', (_e, paths) => describeFiles(paths));
+// Görsel üzerine çizim: çizilmiş PNG ~/.claude-panel/gorseller/ altına üretilmiş adla yazılır (orijinal değişmez)
+ipcMain.handle('img:saveAnnotated', (_e, data, name) => require('./annotate').saveAnnotated(require('./sessions').IMG_DIR, data, { name }));
 ipcMain.handle('dialog:pickFiles', async (_e, cwd) => {
   const r = await dialog.showOpenDialog(win, { properties: ['openFile', 'multiSelections'], defaultPath: expand(cwd) || HOME });
   return r.canceled ? [] : describeFiles(r.filePaths);
