@@ -7,6 +7,7 @@ const os = require('os');
 const path = require('path');
 const crypto = require('crypto');
 const fsp = fs.promises;
+const WIN = process.platform === 'win32';
 
 const TMP = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'cp-qs-')));
 const EV = path.join(TMP, 'ev');
@@ -116,7 +117,7 @@ test('tilde: küçük harfe çevirince uzayan "İ" öneki kaydırmaz (hata düze
 
 test('tilde: varsayılan, modülün gördüğü ev klasörünü kullanır', () => {
   assert.strictEqual(tilde(EV), '~');
-  assert.strictEqual(tilde(path.join(EV, 'a', 'b')), '~/a/b');
+  assert.strictEqual(tilde(path.join(EV, 'a', 'b')), path.join('~', 'a', 'b')); // ayraç platformun kendi ayracı kalır
   assert.strictEqual(tilde('/baska/yer'), '/baska/yer');
 });
 
@@ -205,7 +206,7 @@ test('özet: eksik kullanım alanları 0 sayılır, ev altındaki proje ~ ile g�
   const f = jsonl([user('x', { cwd: path.join(EV, 'proje') }), asst([], {}, { usage: { output_tokens: 7 } })]);
   const s = await summarize(f);
   assert.strictEqual(s.ctxTokens, 7);
-  assert.strictEqual(s.project, '~/proje');
+  assert.strictEqual(s.project, path.join('~', 'proje'));
   assert.strictEqual(s.cwd, path.join(EV, 'proje'));
   const g = jsonl([asst([], {}, { usage: { input_tokens: 3 } })]);
   assert.strictEqual((await summarize(g)).ctxTokens, 3);
@@ -373,12 +374,14 @@ test('görsel temizliği: hem erişim hem değişiklik zamanı eskiyse silinir (
   const sinir = mk('sinir.png', T, T);
   const yeniErisim = mk('erisim.png', T + 10, T - 1);
   const yeniDegisim = mk('degisim.png', T - 1, T + 10);
-  fs.symlinkSync(path.join(d, 'hedef-yok'), path.join(d, 'kirik')); // stat hatası yutulur
+  // kırık bağ: stat hatası yutulur. Windows'ta sembolik bağ yönetici/geliştirici modu ister (EPERM): o zaman bu kısım atlanır
+  let kirik = ['kirik'];
+  try { fs.symlinkSync(path.join(d, 'hedef-yok'), path.join(d, 'kirik')); } catch (e) { if (!WIN || e.code !== 'EPERM') throw e; kirik = []; }
   await pruneImages(30, d, now);
-  assert.deepStrictEqual(fs.readdirSync(d).sort(), ['degisim.png', 'erisim.png', 'kirik', 'sinir.png']);
+  assert.deepStrictEqual(fs.readdirSync(d).sort(), ['degisim.png', 'erisim.png', ...kirik, 'sinir.png']);
   assert.ok(!fs.existsSync(eski) && fs.existsSync(sinir) && fs.existsSync(yeniErisim) && fs.existsSync(yeniDegisim));
   await pruneImages(1, d, now); // gün sayısı dikkate alınır
-  assert.deepStrictEqual(fs.readdirSync(d), ['kirik']);
+  assert.deepStrictEqual(fs.readdirSync(d), kirik);
   assert.strictEqual(await pruneImages(30, path.join(d, 'yok')), undefined); // klasör yoksa sessizce biter
 });
 
@@ -436,12 +439,12 @@ test('mesajlar: araçlar, sonuçlar, hatalar, görseller ve çıktılar', async 
   assert.deepStrictEqual(d.msgs[0], { r: 'u', t: 'ilk soru', ts: 'T1' });
   assert.deepStrictEqual(d.msgs[1], { r: 'a', ts: 'T2', b: [
     { t: 'text', v: 'Merhaba' },
-    { t: 'tool', n: 'Write', a: '~/proje/a.txt', o: 'ok' },
+    { t: 'tool', n: 'Write', a: path.join('~', 'proje', 'a.txt'), o: 'ok' },
     { t: 'tool', n: 'Read', a: '/oku.txt', o: 'hata\n[görsel]\n\n[Image: source: ' + shot + ']', err: true, imgs: [cachedPath('SONUC'), shot] },
     { t: 'tool', n: 'Bash', a: '', o: '' },
     { t: 'tool', n: 'NotebookEdit', a: '', o: '' },
     { t: 'text', v: 'devam' },
-    { t: 'tool', n: 'Edit', a: '~/proje/a.txt', o: '' },
+    { t: 'tool', n: 'Edit', a: path.join('~', 'proje', 'a.txt'), o: '' },
     { t: 'tool', n: 'MultiEdit', a: '/m.txt', o: '' },
     { t: 'tool', n: 'Glob', a: '**/*.js', o: 'z'.repeat(1500) },
   ] });
@@ -451,7 +454,7 @@ test('mesajlar: araçlar, sonuçlar, hatalar, görseller ve çıktılar', async 
   assert.deepStrictEqual(d.outputs, [
     { path: '/m.txt', tool: 'MultiEdit', ts: 'T3' },
     { path: '/n.ipynb', tool: 'NotebookEdit', ts: 'T2' },
-    { path: '~/proje/a.txt', tool: 'Edit', ts: 'T3' },
+    { path: path.join('~', 'proje', 'a.txt'), tool: 'Edit', ts: 'T3' },
   ]);
 });
 
@@ -464,7 +467,7 @@ test('mesajlar: araç özeti alan önceliği, boşluk sadeleştirme, ~ ve 300 ka
   tools.push({ type: 'tool_use', id: 'd', name: 'T', input: { pattern: 5 } });
   tools.push({ type: 'tool_use', id: 'e', name: 'T', input: { file_path: path.join(EV, 'y') } });
   const d = await loadSession(jsonl([user('s'), asst(tools)]));
-  assert.deepStrictEqual(d.msgs[1].b.map(b => b.a), [...fields.map(k => 'değer-' + k), 'ls -la ' + path.join(EV, 'x'), 'q'.repeat(300), '', '5', '~/y']);
+  assert.deepStrictEqual(d.msgs[1].b.map(b => b.a), [...fields.map(k => 'değer-' + k), 'ls -la ' + path.join(EV, 'x'), 'q'.repeat(300), '', '5', path.join('~', 'y')]);
 });
 
 test('mesajlar: tur sınırı — tam sınırda kesilmez, aşınca son N tur kalır', async () => {
@@ -512,14 +515,16 @@ test('dizin: yalnızca proje klasörlerindeki .jsonl dosyaları listelenir', asy
   fs.writeFileSync(path.join(b, '2.jsonl'), '');
   fs.writeFileSync(path.join(kilit, '3.jsonl'), '');
   fs.writeFileSync(path.join(S.PROJECTS_DIR, 'kok.jsonl'), '');
-  fs.chmodSync(kilit, 0o000); t.after(() => { try { fs.chmodSync(kilit, 0o755); } catch {} });
+  // okunamayan klasör: Windows'ta chmod okumayı engellemez; orada kilitli klasör hiç kurulmaz (yalnız POSIX denetimi)
+  if (WIN) fs.rmSync(kilit, { recursive: true });
+  else { fs.chmodSync(kilit, 0o000); t.after(() => { try { fs.chmodSync(kilit, 0o755); } catch {} }); }
   const files = await new SessionIndex(path.join(newDir(), 'i.json')).listFiles();
   const mine = files.filter(f => f.includes(path.sep + 'liste-')).sort();
   assert.deepStrictEqual(mine, [path.join(a, '1.jsonl'), path.join(b, '2.jsonl')]);
   assert.ok(!files.includes(path.join(S.PROJECTS_DIR, 'kok.jsonl')));
-  fs.chmodSync(kilit, 0o755);
+  if (!WIN) fs.chmodSync(kilit, 0o755);
   fs.rmSync(path.join(S.PROJECTS_DIR, 'kok.jsonl'));
-  for (const d of [a, b, kilit]) fs.rmSync(d, { recursive: true });
+  for (const d of [a, b, kilit]) fs.rmSync(d, { recursive: true, force: true });
 });
 
 test('dizin: yenileme — yeni, değişmeyen, değişen, silinen dosyalar ve önbellek kaydı', async () => {
@@ -599,7 +604,9 @@ test('dizin: okunamayan oturum ve yazılamayan önbellek uyarı verir, çökmez'
   const warn = t.mock.method(console, 'warn', () => {});
   const p = projDir('hata');
   const f = jsonl([user('gizli')], { dir: p, id: idOf(30) });
-  fs.chmodSync(f, 0o000); t.after(() => { try { fs.chmodSync(f, 0o644); } catch {} });
+  // Windows'ta chmod okumayı engellemez: orada bu dosyanın açılışı EACCES ile reddedilir (izinsiz dosyanın davranışı)
+  if (WIN) { const open = fsp.open; t.mock.method(fsp, 'open', (p, ...a) => p === f ? Promise.reject(Object.assign(new Error('EACCES: permission denied'), { code: 'EACCES' })) : open.call(fsp, p, ...a)); }
+  else { fs.chmodSync(f, 0o000); t.after(() => { try { fs.chmodSync(f, 0o644); } catch {} }); }
   const blocker = path.join(newDir(), 'dosya'); fs.writeFileSync(blocker, '');
   const idx = new SessionIndex(path.join(blocker, 'index.json'));
   assert.deepStrictEqual(await idx.refresh([f]), []);
@@ -607,7 +614,7 @@ test('dizin: okunamayan oturum ve yazılamayan önbellek uyarı verir, çökmez'
   const msgs = warn.mock.calls.map(c => c.arguments[0]);
   assert.deepStrictEqual(msgs, ['özet okunamadı', 'index yazılamadı']);
   assert.strictEqual(warn.mock.calls[0].arguments[1], f);
-  fs.chmodSync(f, 0o644);
+  if (!WIN) fs.chmodSync(f, 0o644);
   fs.rmSync(p, { recursive: true });
 });
 

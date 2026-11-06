@@ -45,7 +45,8 @@ function make(opts = {}) {
   const spawn = fakeSpawn();
   const app = { getVersion: () => '0.2.0', quit: () => quits.push(Date.now()) };
   const settingsFile = path.join(root, 'ayar', 'settings.json');
-  const u = createUpdater({ app, settingsFile, enabled: true, publicKey: PUB, downloadDir: dl, spawn,
+  // platform: Windows'ta varsayılan kaynaklar gerçek NAS yollarıdır (V:…); testler yalnız kendi klasörlerini denesin
+  const u = createUpdater({ app, settingsFile, enabled: true, publicKey: PUB, downloadDir: dl, spawn, platform: 'darwin',
     onState: s => { states.push(s.phase); snaps.push(s); }, ...opts });
   return { u, root, dir, dl, states, snaps, quits, spawn, settingsFile };
 }

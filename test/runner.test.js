@@ -3,7 +3,8 @@ const { test } = require('node:test');
 const assert = require('node:assert');
 const path = require('path');
 const os = require('os');
-process.env.CLAUDE_PANEL_CLAUDE_BIN = path.join(__dirname, 'fake-claude.js');
+// Windows .js dosyasını doğrudan başlatamaz (spawn EFTYPE): npm cmd-shim biçimli sarmalayıcı kullanılır
+process.env.CLAUDE_PANEL_CLAUDE_BIN = path.join(__dirname, process.platform === 'win32' ? 'fake-claude.cmd' : 'fake-claude.js');
 const { Runner, authStatus } = require('../src/main/runner');
 
 function collect() {
