@@ -63,7 +63,7 @@ function electron(steps, log) {
   };
   const fd = fs.openSync(log, 'w');
   return new Promise(resolve => {
-    child = spawn(ELECTRON, ['.', '--selftest', '--user-data-dir=' + UD], { cwd: ROOT, env, stdio: ['ignore', fd, fd], windowsHide: true });
+    child = spawn(ELECTRON, ['.', '--selftest', '--user-data-dir=' + UD, ...(process.platform === 'win32' ? ['--disable-gpu'] : [])], { cwd: ROOT, env, stdio: ['ignore', fd, fd], windowsHide: true });
     const p = child, t = setTimeout(() => { fs.writeSync(fd, `\nZAMAN AŞIMI: ${TIMEOUT} ms içinde bitmedi, süreç kapatıldı\n`); kill(p); }, TIMEOUT);
     p.on('error', e => { fs.writeSync(fd, 'başlatılamadı: ' + e.message + '\n'); });
     p.on('close', () => { clearTimeout(t); child = null; fs.closeSync(fd); resolve(); }); // çıkış kodu önemsiz: sonuç günlükteki SELFTEST satırından okunur
