@@ -93,7 +93,7 @@
     ta.value = old.val; s.inputDraft = old.draft; autosize(ta); ta.blur(); ta.dispatchEvent(new FocusEvent('focusout', {bubbles: true}));
   }
   res.ok = res.acik && res.bolumler[0] === 'Şablonlar' && res.bolumler.includes('Komutlar') && /\/ menüsü/.test(res.baslik || '')
-    && res.comp.includes('/compact') && res.compHayaletYok && res.asagi === 1 && res.yukari === 0
+    && res.comp.includes('/compact') && res.compHayaletYok && res.asagi === (res.comp.length > 1 ? 1 : 0) && res.yukari === 0
     && res.enterAlindi && res.enterSonra === res.enterBeklenen && res.enterKapandi
     && res.tplIlk && res.tplHayalet.length > 3 && res.tabAlindi && res.tabSablon && res.tabKapandi
     && res.escAlindi && res.escKapandi && res.escSonraKapali && res.tikSonra === '/context ' && res.tikOdak

@@ -58,7 +58,7 @@
     return {bosluk: Math.round(a.top - r.bottom), solFark: Math.round(r.left - a.left), sagFark: Math.round(a.right - r.right),
       pencereIci: r.left >= 0 && r.right <= innerWidth && r.top >= 0 && r.bottom <= innerHeight, bolmeIci: r.left >= pr.left - 1 && r.right <= pr.right + 1, genis: r.width > Math.min(innerWidth - 8, pr.right) - Math.max(8, pr.left), bolmeKenari: Math.abs(r.left - Math.max(8, pr.left)) <= 1 || Math.abs(r.right - Math.min(innerWidth - 8, pr.right)) <= 1, yan: m.dataset.side}; };
   /* Düğmenin sol ya da sağ kenarına hizalı; dar bölmede iki hizada da sığmıyorsa bölme kenarına kaydırılır ve düğmeyi örter */
-  const good = o => o.bosluk >= 0 && o.bosluk <= 10 && (Math.abs(o.solFark) <= 1 || Math.abs(o.sagFark) <= 1 || (o.solFark <= 0 && o.sagFark <= 0 && o.bolmeKenari)) && o.pencereIci && (o.bolmeIci || o.genis); // bölmeden geniş menü (ör. model menüsü) yalnız pencere içinde tutulur (menupos.js)
+  const good = o => o.bosluk >= 0 && o.bosluk <= 10 && (Math.abs(o.solFark) <= 1 || Math.abs(o.sagFark) <= 1 || (o.solFark <= 0 && o.sagFark <= 0 && o.bolmeKenari)) && o.pencereIci && (o.bolmeIci || o.genis);
   for(const [k, sel] of [['model', '[data-model]'], ['dusunme', '[data-effort]'], ['sablon', '[data-tpl]']]){ res[k] = check(sel); closeMenu(); await W(50); }
   res.kullanim = check('[data-usage]');
   const m = document.querySelector('.menu'), y0 = m && m.getBoundingClientRect().top;
