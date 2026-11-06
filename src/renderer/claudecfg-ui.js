@@ -67,7 +67,7 @@
     if (CC.tab === 'set' && CC.sub === 'raw') checkRaw();
   }
   const fileBtn = (k, cur, attr) => { const f = CC.cache[k]; return `<button data-cc="${attr}" data-k="${k}" class="cc-file ${cur === k ? 'on' : ''}"><b>${h(short(k))}</b><span>${h(label(k).split(' · ')[1] || '')}</span>${f && f.exists ? '' : '<em>yok</em>'}${f && f.error ? '<em class="cc-bad">bozuk</em>' : ''}</button>`; };
-  const pathLine = f => `<div class="cc-path mono" title="${h(f.path)}">${h(f.path)}</div>`;
+  const pathLine = f => `<div class="cc-path mono" title="${h(f.path)}"><span dir="ltr">${h(f.path)}</span></div>`; // uzun yolda baş kısaltılır, dosya adı görünür
 
   function memTab() {
     const keys = MD_KEYS.filter(fileOf), f = CC.cache[CC.mem];
