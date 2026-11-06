@@ -457,3 +457,35 @@ test('start/stop: 15 sn sonra ve 30 dakikada bir denetler, stop sonrası durur',
   assert.strictEqual(checks(), 2);
   assert.strictEqual(t.u.state.phase, 'none');
 });
+
+// ---------- ayarlarda gösterilen güncelleme klasörü (dirInfo) ----------
+test('dirInfo: Windows\'ta seçim yoksa varsayılan NAS klasörü seçili ve "varsayılan" işaretli', () => {
+  const { u } = make({ platform: 'win32' });
+  assert.deepStrictEqual(u.dirInfo(), { dir: DEFAULT_SOURCES[0], defaultDir: DEFAULT_SOURCES[0], isDefault: true });
+});
+test('dirInfo: kullanıcı başka klasör seçince o görünür; varsayılana dönünce yine varsayılan', () => {
+  const { u, settingsFile } = make({ platform: 'win32' });
+  u.setDir('E:\\Baska\\Exe');
+  assert.deepStrictEqual(u.dirInfo(), { dir: 'E:\\Baska\\Exe', defaultDir: DEFAULT_SOURCES[0], isDefault: false });
+  assert.strictEqual(u.sources()[0], 'E:\\Baska\\Exe');
+  u.setDir(null);                                       // "Varsayılana dön"
+  assert.deepStrictEqual(u.dirInfo(), { dir: DEFAULT_SOURCES[0], defaultDir: DEFAULT_SOURCES[0], isDefault: true });
+  assert.ok(!('updateDir' in JSON.parse(fs.readFileSync(settingsFile, 'utf8'))));
+  assert.deepStrictEqual(u.sources(), DEFAULT_SOURCES);
+});
+test('dirInfo: varsayılanın aynısını seçmek de "varsayılan" sayılır', () => {
+  const { u } = make({ platform: 'win32' });
+  u.setDir(DEFAULT_SOURCES[0]);
+  assert.deepStrictEqual(u.dirInfo(), { dir: DEFAULT_SOURCES[0], defaultDir: DEFAULT_SOURCES[0], isDefault: true });
+});
+test('dirInfo: Mac\'te varsayılan yok (arayüz satırı gizler); seçilmiş klasör yine bildirilir', () => {
+  const { u } = make({ platform: 'darwin' });
+  assert.deepStrictEqual(u.dirInfo(), { dir: null, defaultDir: null, isDefault: true });
+  u.setDir('/Volumes/NAS/Exe');
+  assert.deepStrictEqual(u.dirInfo(), { dir: '/Volumes/NAS/Exe', defaultDir: null, isDefault: false });
+});
+test('dirInfo: bozuk ayar dosyasında varsayılana düşer', () => {
+  const { u, settingsFile } = make({ platform: 'win32' });
+  fs.mkdirSync(path.dirname(settingsFile), { recursive: true }); fs.writeFileSync(settingsFile, '{bozuk');
+  assert.deepStrictEqual(u.dirInfo(), { dir: DEFAULT_SOURCES[0], defaultDir: DEFAULT_SOURCES[0], isDefault: true });
+});

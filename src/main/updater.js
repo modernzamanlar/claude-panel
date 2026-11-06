@@ -141,6 +141,12 @@ function createUpdater({
   return {
     get state() { return state; }, check, install, start, sources,
     getDir: () => readSettings().updateDir || null,
+    // Ayarlarda gösterilecek klasör: kullanıcı seçmediyse (ya da varsayılanın aynısını seçtiyse) varsayılan NAS klasörü.
+    // Varsayılanı olmayan platformda (Mac) defaultDir null: arayüz satırı göstermez.
+    dirInfo: () => {
+      const own = readSettings().updateDir || null, def = defaults[0] || null;
+      return { dir: own || def, defaultDir: def, isDefault: !own || own === def };
+    },
     setDir: dir => { const s = readSettings(); if (dir) s.updateDir = dir; else delete s.updateDir; writeSettings(s); if (state.phase !== 'ready') set({ phase: 'idle' }); return sources(); },
     stop: () => clearInterval(timer),
   };

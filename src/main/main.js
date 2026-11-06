@@ -17,7 +17,8 @@ const { Runner, authStatus, openLoginTerminal, openRemoteTerminal, mcpList, cont
 const SELFTEST = process.argv.includes('--selftest');
 const IS_MAC = process.platform === 'darwin';
 // Windows/Linux: başlık çubuğu gizli, pencere düğmeleri (— □ ×) üst çubuğun sağına bindirilir
-const overlayColors = dark => ({ color: dark ? '#1f1e1d' : '#f3f1ea', symbolColor: dark ? '#f3f2ee' : '#3d3929', height: 44 });
+// look: renderer'daki renk takımı (tema.js) — 'claude' eski koyu, diğer koyu değerler varsayılan Gece takımı (üst çubuk --side)
+const overlayColors = (dark, look) => ({ color: dark ? (look === 'claude' ? '#1f1e1d' : '#111114') : '#f3f1ea', symbolColor: dark ? '#f3f2ee' : '#3d3929', height: 44 });
 const HOME = os.homedir();
 const expand = p => (p && p.startsWith('~') ? path.join(HOME, p.slice(1)) : p);
 
@@ -48,16 +49,19 @@ const mirror = createMirror({
 // Kendi kendini güncelleme (Windows): güncelleme klasöründeki guncelleme.json'a bakar
 const updater = createUpdater({
   app, settingsFile: path.join(workspace.DIR, 'settings.json'),
+  platform: (SELFTEST && process.env.CLAUDE_PANEL_UI_PLATFORM) || process.platform, // selftest'te Windows taklidi varsayılan klasörü de gösterir
   onState: st => { if (win && !win.isDestroyed()) win.webContents.send('update:state', st); },
 });
-ipcMain.handle('update:state', () => ({ ...updater.state, sources: updater.sources(), dir: updater.getDir() }));
+ipcMain.handle('update:state', () => ({ ...updater.state, sources: updater.sources(), dir: updater.getDir(), dirInfo: updater.dirInfo() }));
 ipcMain.handle('update:check', () => updater.check({ manual: true }));
 ipcMain.handle('update:install', () => updater.install(() => { quitConfirmed = true; mirror.flush(); }));
 ipcMain.handle('update:pickDir', async () => {
   const r = await dialog.showOpenDialog(win, { title: 'Güncelleme klasörünü seç (guncelleme.json olan klasör)', properties: ['openDirectory'], defaultPath: updater.getDir() || undefined });
   if (r.canceled || !r.filePaths[0]) return null;
-  updater.setDir(r.filePaths[0]); return updater.check({ manual: true });
+  updater.setDir(r.filePaths[0]); return { ...(await updater.check({ manual: true })), dirInfo: updater.dirInfo() };
 });
+// "Varsayılana dön": kullanıcının seçtiği klasör silinir, varsayılan NAS klasörleri denenir
+ipcMain.handle('update:resetDir', async () => { updater.setDir(null); return { ...(await updater.check({ manual: true })), dirInfo: updater.dirInfo() }; });
 function syncSearch() {
   return search.sync(index.list(), (done, total) => { if (win && !win.isDestroyed() && (done % 5 === 0 || done === total)) win.webContents.send('search:progress', { done, total }); })
     .catch(e => console.warn('arama dizini', e.message));
@@ -69,8 +73,8 @@ function createWindow() {
     width: 1440, height: 900, minWidth: 900, minHeight: 600,
     title: 'Claude Panel',
     titleBarStyle: IS_MAC ? 'hiddenInset' : 'hidden',
-    ...(IS_MAC ? { trafficLightPosition: { x: 14, y: 15 } } : { titleBarOverlay: overlayColors(nativeTheme.shouldUseDarkColors), icon: path.join(__dirname, '..', '..', 'build', 'icon.png') }),
-    backgroundColor: nativeTheme.shouldUseDarkColors ? '#1f1f1e' : '#faf9f5',
+    ...(IS_MAC ? { trafficLightPosition: { x: 14, y: 15 } } : { titleBarOverlay: overlayColors(true), icon: path.join(__dirname, '..', '..', 'build', 'icon.png') }),
+    backgroundColor: '#070709', // varsayılan tema (Gece) koyu; kayıtlı tercih renderer'da uygulanınca üst çubuk renderer'dan güncellenir
     show: !SELFTEST,
     webPreferences: {
       devTools: !app.isPackaged, // dağıtım sürümünde geliştirici araçları kapalı
@@ -116,7 +120,7 @@ ipcMain.handle('workspace:load', () => {
   if (!ws.firstRun) mirror.schedule(ws);
   return ws;
 });
-ipcMain.on('win:theme', (_e, dark) => { if (!IS_MAC && win && !win.isDestroyed() && win.setTitleBarOverlay) try { win.setTitleBarOverlay(overlayColors(!!dark)); } catch {} });
+ipcMain.on('win:theme', (_e, dark, look) => { if (!IS_MAC && win && !win.isDestroyed() && win.setTitleBarOverlay) try { win.setTitleBarOverlay(overlayColors(!!dark, look === 'claude' ? 'claude' : 'gece')); } catch {} });
 ipcMain.handle('workspace:save', (_e, data) => { mirror.schedule(workspace.save(data)); return true; });
 // Pencere kapanırken: bekleyen kaydı eşzamanlı yaz ve diske hemen yansıt (son değişiklik kaybolmasın)
 ipcMain.on('workspace:saveSync', (e, data) => {
