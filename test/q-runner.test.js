@@ -851,3 +851,40 @@ test('Uzaktan Kontrol / giriş: Terminal açılamazsa hata verir (sessizce "aç�
   await assert.rejects(openRemoteTerminal(sh, { sessionId: ID, cwd: fs.realpathSync(tmp('qr fd ')), name: 'x' }), /Terminal açılamadı: No application/);
   await assert.rejects(openLoginTerminal(sh), /Terminal açılamadı/);
 });
+
+// ================= Arka plan görevleri: giriş açık kalır, stop_task =================
+test('arka plan görevi sürerken result girişi kapatmaz; liste boşalınca kapanır', async () => {
+  const { evs, proc } = await started();
+  proc.line({ type: 'system', subtype: 'background_tasks_changed', tasks: [{ task_id: 'b1' }] });
+  proc.line({ type: 'result' });
+  assert.equal(proc.endCount, 0, 'görev sürüyor: giriş açık');
+  proc.line({ type: 'system', subtype: 'background_tasks_changed', tasks: [{ task_id: 'b1' }] });
+  assert.equal(proc.endCount, 0);
+  proc.line({ type: 'system', subtype: 'background_tasks_changed', tasks: [] });
+  assert.equal(proc.endCount, 1);
+  assert.equal(evs.filter(e => e.ev && e.ev.subtype === 'background_tasks_changed').length, 3, 'olaylar arayüze de gider');
+});
+test('arka plan listesi result öncesinde boşalırsa giriş result ile kapanır; tasks dizi değilse yok sayılır', async () => {
+  const { proc } = await started();
+  proc.line({ type: 'system', subtype: 'background_tasks_changed', tasks: [{ task_id: 'b1' }] });
+  proc.line({ type: 'system', subtype: 'background_tasks_changed', tasks: [] });
+  assert.equal(proc.endCount, 0, 'tur sürüyor: giriş açık');
+  proc.line({ type: 'system', subtype: 'background_tasks_changed', tasks: null });
+  proc.line({ type: 'system', subtype: 'other', tasks: [{ task_id: 'x' }] });
+  proc.line({ type: 'result' });
+  assert.equal(proc.endCount, 1);
+});
+test('stopTask: giriş açıkken stop_task denetim isteği yazar; geçersiz kimlik, bilinmeyen çalıştırma ve kapalı giriş false', async () => {
+  const { runner, proc } = await started();
+  assert.equal(runner.stopTask('yok', 'b1'), false);
+  assert.equal(runner.stopTask('R', 'b 1'), false);
+  assert.equal(runner.stopTask('R', '../x'), false);
+  assert.equal(runner.stopTask('R', 'x'.repeat(81)), false);
+  assert.equal(runner.stopTask('R', 'b1x-Z_9'), true);
+  const w = proc.written.at(-1);
+  assert.equal(w.type, 'control_request');
+  assert.match(w.request_id, /^[0-9a-f-]{36}$/);
+  assert.deepEqual(w.request, { subtype: 'stop_task', task_id: 'b1x-Z_9' });
+  proc.line({ type: 'result' });
+  assert.equal(runner.stopTask('R', 'b1'), false, 'giriş kapandı');
+});
