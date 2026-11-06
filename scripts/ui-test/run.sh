@@ -11,7 +11,9 @@
 set -e
 M=${1:-mac}; ROOT=${0:A:h:h:h}; HERE=${0:A:h}
 D=$(mktemp -d "${TMPDIR:-/tmp}/cp-uitest-XXXXXX"); trap 'rm -rf "$D"' EXIT
-mkdir -p $D/home $D/mirror $D/out
+mkdir -p $D/home $D/mirror $D/out $D/export
+# Claude ayarları adımları (extra/claude-ayarlari.js) gerçek ~/.claude yerine bu geçici Claude ev klasörünü kullanır
+node $HERE/claude-home-fixture.js $D/claude-home > /dev/null
 cd "$ROOT"
 # Ek adımlar: scripts/ui-test/extra/*.js (her dosya bir ya da daha fazla adım, // -- ile ayrılır).
 # Her ek adım {name: 'kontrol adı', ok: true/false, ...ayrıntı} döndürür; run.sh bunları ayrı kontroller olarak sayar.
@@ -22,7 +24,7 @@ bl = [b for f in fs for b in open(f).read().split('//--') if b.strip()]
 print('\n'.join(' '.join(l.strip() for l in b.strip().splitlines()) for b in bl))" $HERE/steps.js $HERE)
 NBASE=$(python3 -c "import sys; print(len([b for b in open(sys.argv[1]).read().split('//--') if b.strip()]))" $HERE/steps.js)
 PLAT=(); [[ $M == win ]] && PLAT=(CLAUDE_PANEL_UI_PLATFORM=win32)
-env $PLAT CLAUDE_PANEL_CLAUDE_BIN="$ROOT/test/fake-claude.js" FAKE_PERM=1 FAKE_DELAY=80 CLAUDE_PANEL_HOME=$D/home CLAUDE_PANEL_MIRROR=$D/mirror SELFTEST_OUT=$D/out SELFTEST_STEPS="$STEPS" TMPDIR=$D/ npx electron . --selftest > $D/log.txt 2>&1 || true
+env $PLAT CLAUDE_PANEL_CLAUDE_BIN="$ROOT/test/fake-claude.js" FAKE_PERM=1 FAKE_DELAY=80 CLAUDE_PANEL_HOME=$D/home CLAUDE_PANEL_MIRROR=$D/mirror SELFTEST_OUT=$D/out CLAUDE_PANEL_CLAUDE_HOME=$D/claude-home SELFTEST_EXPORT_DIR=$D/export SELFTEST_STEPS="$STEPS" TMPDIR=$D/ npx electron . --selftest > $D/log.txt 2>&1 || true
 env $PLAT CLAUDE_PANEL_HOME=$D/home CLAUDE_PANEL_MIRROR=$D/mirror SELFTEST_OUT=$D/out SELFTEST_STEPS='(async()=>({tema: document.documentElement.dataset.theme || null, prefs: WS.prefs, effort0: sess(S.panes[0]) && sess(S.panes[0]).effort, control0: sess(S.panes[0]) && sess(S.panes[0]).control, sort: FX.sort, side: S.side}))()' TMPDIR=$D/ npx electron . --selftest > $D/log2.txt 2>&1 || true
 python3 - $D/log.txt $D/log2.txt $M $NBASE <<'PY'
 import sys, json

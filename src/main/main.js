@@ -252,8 +252,8 @@ ipcMain.handle('ccfg:openAgent', async (_e, scope, file, cwd) => !(await shell.o
 ipcMain.handle('ccfg:export', async (_e, name, text) => {
   if (typeof text !== 'string' || typeof name !== 'string') throw new Error('Geçersiz dışa aktarma');
   const safe = path.basename(name).replace(/[\\/:*?"<>|]/g, '') || 'sohbet.md';
-  // selftest: diyalog açılmaz, SELFTEST_EXPORT_DIR'e yazılır
-  const target = SELFTEST && process.env.SELFTEST_EXPORT_DIR ? path.join(process.env.SELFTEST_EXPORT_DIR, safe) : null;
+  // selftest: diyalog açılmaz (test asılı kalmasın), SELFTEST_EXPORT_DIR'e (yoksa SELFTEST_OUT'a) yazılır
+  const target = SELFTEST ? path.join(process.env.SELFTEST_EXPORT_DIR || process.env.SELFTEST_OUT || os.tmpdir(), safe) : null;
   const r = target ? { canceled: false, filePath: target } : await dialog.showSaveDialog(win, { title: 'Sohbeti Markdown olarak kaydet', defaultPath: path.join(HOME, 'Desktop', safe), filters: [{ name: 'Markdown', extensions: ['md'] }] });
   if (r.canceled || !r.filePath) return null;
   const fp = /\.md$/i.test(r.filePath) ? r.filePath : r.filePath + '.md';
