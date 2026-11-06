@@ -6,7 +6,7 @@ const os = require('os');
 const path = require('path');
 const ch = require('../src/main/changes');
 
-const TMP = fs.mkdtempSync(path.join(os.tmpdir(), 'cp-changes-'));
+const TMP = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'cp-changes-'))); // Mac'te /var → /private/var bağı
 test.after(() => fs.rmSync(TMP, { recursive: true, force: true }));
 let nth = 0;
 const dir = () => { const d = path.join(TMP, 'd' + (++nth)); fs.mkdirSync(d, { recursive: true }); return d; };
