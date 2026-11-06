@@ -99,7 +99,7 @@ async function turn(msg) {
     { name: 'sahte-komut', description: 'Sahte proje komutu (project)', argumentHint: '<ad>' },
   ] });
   // Yerel komut (/compact, /context): model çağrılmaz, çıktı <local-command-stdout> ile gelir
-  const lc = /^\/(compact|context)\b/.exec(text);
+  const lc = /^\/(context)\b/.exec(text); // /compact aşağıda gerçek CLI gibi (status + compact_boundary) işlenir
   if (lc) {
     out({ type: 'user', session_id: sid, message: { role: 'user', content: '<local-command-stdout>' + (lc[1] === 'compact' ? 'Compacted' : '## Context Usage') + '</local-command-stdout>' } });
     finish(''); return;

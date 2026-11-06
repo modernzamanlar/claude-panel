@@ -37,7 +37,7 @@
       if (m && m[2].trim()) s.run.live.b.push({ t: 'text', v: `<p class="run-note">${m[1] === 'stderr' ? '⚠ ' : '✓ '}${esc(m[2].trim())}</p>` });
       return true;
     }
-    if (ev.type === 'system' && ev.subtype === 'compact_boundary' && s.run) { s.run.live.b.push({ t: 'text', v: '<p class="run-note">Bağlam sıkıştırıldı</p>' }); return true; }
+    // compact_boundary burada işlenmez: app.js onCompactEvent sohbete sıkıştırma satırı ve bildirim koyar (Ö6)
     return false;
   }
 

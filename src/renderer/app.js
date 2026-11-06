@@ -1779,7 +1779,7 @@ async function ensureLoaded(id, force){
       s.msgs.push(...keep);
       if(d.stats) onStats(s, d.stats);
       s.outputs = d.outputs.map(o => o.path); s.skipped = d.skipped; s.turns = d.turns; s.loadErr = null;
-    } catch(e){ if(!s.msgs.length) s.loadErr = String(e && e.message || e); else console.warn('yeniden yüklenemedi', e); }
+    } catch(e){ if(!s.msgs.length) s.loadErr = String(e && e.message || e); else if(!/Oturum bulunamadı/.test(String(e && e.message || e))) console.warn('yeniden yüklenemedi', e); } // kaydı henüz yazılmamış (yeni) oturum: sessiz geç
     s.loaded = true; loading.delete(id);
     if(S.panes.includes(id)) { renderPanes(); if(S.panes[S.active] === id) renderInfo(); }
     if(s.reloadAgain){ s.reloadAgain = false; setTimeout(() => ensureLoaded(id, true), 1000); }
