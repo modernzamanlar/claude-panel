@@ -777,3 +777,10 @@ img.dog8{image-rendering:pixelated;image-rendering:crisp-edges;display:block}
 .pane.compact .pill{padding:3px 6px}
 .pane.compact .pill[data-effort] span{display:none}
 .ibtn.mic{margin-left:2px}
+/* Video oynatıcı videonun kendi en-boy oranında: --ar meta veri gelince app.js showMedia'da yazılır (öncesinde 16:9 yer tutucu).
+   Genişlik bölmeyi, yükseklik bölmenin %70'ini ve 520 px'i geçmez; kutu videoya oturduğu için yanlarda siyah boşluk kalmaz. */
+.msgs{container-type:size}
+.media.mv:not(.wait){--ar:16/9;--mh:min(520px,70cqh);width:min(100%,calc(var(--mh) * (var(--ar))));align-self:flex-start}
+.media.mv.load{width:min(100%,480px)}
+.media-list.u-media .media.mv{align-self:flex-end}
+.media.mv:not(.wait) .media-el video{width:100%;height:auto;max-height:none;aspect-ratio:var(--ar)}

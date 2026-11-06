@@ -1132,16 +1132,40 @@ function startChat(){
 /* ---------- Context menus ---------- */
 function m_updatePickCount(){ const l = document.querySelectorAll('#nf .fl span')[1]; if(l) l.textContent = '· '+NF.picked.size+' seçili'; }
 function closeMenu(){ document.querySelector('.menu')?.remove(); }
-function menu(x, y, html){
+// anchor {el, side, align}: menü düğmeye hizalı açılır (menupos.js), pencere boyutu değişince / kaydırılınca yeniden yerleşir
+function menu(x, y, html, anchor){
   closeMenu(); const m = document.createElement('div'); m.className='menu'; m.innerHTML=html;
   // Windows'ta üst 44 px pencere düğmelerine (— □ ×) ve sürükleme alanına ait: menü oraya taşmaz
   const top0 = IS_MAC ? 8 : 52; m.style.maxHeight = (innerHeight - top0 - 8) + 'px';
   document.body.appendChild(m);
-  const r = m.getBoundingClientRect();
-  m.style.left = Math.max(8, Math.min(x, innerWidth-r.width-8))+'px'; m.style.top = Math.max(top0, Math.min(y, innerHeight-r.height-8))+'px';
+  if(anchor && anchor.el){ m._anchor = {...anchor, sel: anchorSel(anchor.el)}; placeMenu(m); }
+  else { const r = m.getBoundingClientRect();
+  m.style.left = Math.max(8, Math.min(x, innerWidth-r.width-8))+'px'; m.style.top = Math.max(top0, Math.min(y, innerHeight-r.height-8))+'px'; }
   const cur = m.querySelector('.m-scroll [data-cur]'); if(cur) cur.scrollIntoView({block:'nearest'});
   const q = m.querySelector('.m-q'); if(q) q.focus({preventScroll:true});
 }
+// Düğme yeniden çizilirse (setSlot) aynı bölmedeki yeni düğmeyi bulmak için seçici
+function anchorSel(el){
+  const at = [...el.attributes].find(a => a.name.startsWith('data-')); if(!at) return null;
+  const pane = el.closest('section[data-pane]');
+  return (pane ? `section[data-pane="${pane.dataset.pane}"] ` : '') + `[${at.name}${at.value ? `="${CSS.escape(at.value)}"` : ''}]`;
+}
+function placeMenu(m){
+  const A = m._anchor;
+  if(!A.el.isConnected){ const n = A.sel && document.querySelector(A.sel); if(!n) return false; A.el = n; }
+  const a = A.el.getBoundingClientRect(); if(!a.width && !a.height) return false;
+  const pane = A.el.closest('.pane'), b = pane && pane.getBoundingClientRect();
+  const top0 = IS_MAC ? 8 : 52, view = {width: innerWidth, height: innerHeight};
+  // Yatay hizalama verilmediyse: bölmenin sağ yarısındaki düğmede menü sağ kenara, sol yarısındakinde sol kenara hizalanır
+  const o = {side: A.side || 'above', align: A.align || (b && a.left + a.width / 2 > b.left + b.width / 2 ? 'end' : 'start'), top: top0, bounds: b ? {left: b.left, right: b.right} : null};
+  m.style.maxHeight = (innerHeight - top0 - 8) + 'px';
+  let r = m.getBoundingClientRect(), p = menuPos.place(a, r, view, o);
+  if(r.height > p.maxHeight){ m.style.maxHeight = p.maxHeight + 'px'; r = m.getBoundingClientRect(); p = menuPos.place(a, r, view, o); }
+  m.style.left = p.x + 'px'; m.style.top = p.y + 'px'; m.dataset.side = p.side;
+  return true;
+}
+addEventListener('resize', () => { const m = document.querySelector('.menu'); if(m && m._anchor && !placeMenu(m)) closeMenu(); });
+document.addEventListener('scroll', e => { const m = document.querySelector('.menu'); if(m && m._anchor && !m.contains(e.target) && !placeMenu(m)) closeMenu(); }, true);
 // Boş bölmedeki sohbet arama: yerinde süzer; boşken son 6 sohbet, yazınca eşleşen ilk 30
 function filterPanePick(inp){
   const q = trNorm(inp.value.trim()), box = inp.parentElement.querySelector('.recent'); let n = 0;
@@ -1333,17 +1357,17 @@ document.addEventListener('click', e => {
   if(t.closest('[data-mcpcheck]')){ const s = sess(S.panes[S.active]); if(s) checkConnectors(s); return; }
   if(t.closest('[data-login]')){ API.claude.login(); toast('Terminal açıldı: girişi tarayıcıda tamamla, sonra "Tekrar kontrol et"'); let n = 0; const iv = setInterval(async () => { n++; const a = await checkAuth(); if(a.loggedIn || n > 40){ clearInterval(iv); if(a.loggedIn) toast('Giriş tamam — artık panelden yazabilirsin'); } }, 3000); return; }
   if(t.closest('[data-authcheck]')){ checkAuth().then(a => toast(a.loggedIn ? 'Giriş tamam' : 'Hâlâ giriş yapılmamış')); return; }
-  const pm = t.closest('[data-pmode]'); if(pm){ const r = pm.getBoundingClientRect(); const s = sess(pm.dataset.pmode); menu(r.left, r.top - 200, `<div class="mh">İzin modu</div>${PMODES.map(([k,l]) => `<button data-m="pmode" data-id="${s.id}" data-v="${k}">${pmodeOf(s)===k?'✓ ':'&nbsp;&nbsp;&nbsp;'}${l}</button>`).join('')}`); return; }
+  const pm = t.closest('[data-pmode]'); if(pm){ const r = pm.getBoundingClientRect(); const s = sess(pm.dataset.pmode); menu(r.left, r.top - 200, `<div class="mh">İzin modu</div>${PMODES.map(([k,l]) => `<button data-m="pmode" data-id="${s.id}" data-v="${k}">${pmodeOf(s)===k?'✓ ':'&nbsp;&nbsp;&nbsp;'}${l}</button>`).join('')}`, {el: pm}); return; }
   const ctl = t.closest('[data-control]'); if(ctl){ const s = sess(ctl.dataset.control); const on = !controlOf(s);
     if(on && !CTRL.desktop){ const r = ctl.getBoundingClientRect();
       menu(r.left, r.top - 150, `<div class="mh">Masaüstü kontrolü için agent-desktop gerekli</div>
         <button data-m="ctlinstall" data-id="${s.id}">${ic('plus')}agent-desktop'ı kur ve aç (npm, ~1 dk)</button>
-        <button data-m="ctlbrowser" data-id="${s.id}">${ic('ext')}Yalnızca tarayıcıyla aç (Chrome)</button>`); return; }
+        <button data-m="ctlbrowser" data-id="${s.id}">${ic('ext')}Yalnızca tarayıcıyla aç (Chrome)</button>`, {el: ctl}); return; }
     setControl(s, on); return; }
-  const us = t.closest('[data-usage]'); if(us){ const r = us.getBoundingClientRect(); usageMenu(r.left - 80, r.top - 330); return; }
+  const us = t.closest('[data-usage]'); if(us){ const r = us.getBoundingClientRect(); usageMenu(r.left - 80, r.top - 330, {el: us}); return; }
   const eff = t.closest('[data-effort]'); if(eff){ const r = eff.getBoundingClientRect(); const s = sess(eff.dataset.effort); const cur = effortOf(s);
-    menu(r.left - 40, r.top - 236, `<div class="mh">Düşünme seviyesi</div>${EFFORTS.map(([k,l,d]) => `<button data-m="effort" data-id="${s.id}" data-v="${k||''}" title="${esc(d)}">${cur===k?'✓ ':'&nbsp;&nbsp;&nbsp;'}${l}</button>`).join('')}`); return; }
-  const mdl = t.closest('[data-model]'); if(mdl){ const r = mdl.getBoundingClientRect(); const s = sess(mdl.dataset.model); menu(r.left - 60, r.top - 160, `<div class="mh">Model</div>${MODELS.map(([k,l]) => `<button data-m="model" data-id="${s.id}" data-v="${k||''}">${(s.modelPick||null)===k?'✓ ':'&nbsp;&nbsp;&nbsp;'}${l}${k?'':' · '+esc(s.model)}</button>`).join('')}`); return; }
+    menu(r.left - 40, r.top - 236, `<div class="mh">Düşünme seviyesi</div>${EFFORTS.map(([k,l,d]) => `<button data-m="effort" data-id="${s.id}" data-v="${k||''}" title="${esc(d)}">${cur===k?'✓ ':'&nbsp;&nbsp;&nbsp;'}${l}</button>`).join('')}`, {el: eff}); return; }
+  const mdl = t.closest('[data-model]'); if(mdl){ const r = mdl.getBoundingClientRect(); const s = sess(mdl.dataset.model); menu(r.left - 60, r.top - 160, `<div class="mh">Model</div>${MODELS.map(([k,l]) => `<button data-m="model" data-id="${s.id}" data-v="${k||''}">${(s.modelPick||null)===k?'✓ ':'&nbsp;&nbsp;&nbsp;'}${l}${k?'':' · '+esc(s.model)}</button>`).join('')}`, {el: mdl}); return; }
   const rpl = t.closest('[data-reply]'); if(rpl){ const s = sess(rpl.dataset.sid), i = S.panes.indexOf(s && s.id); const ta = i >= 0 && document.querySelector(`[data-ta="${i}"]`);
     if(ta){ ta.value = rpl.dataset.reply; s.inputDraft = ta.value; send(i); } else toast('Önce sohbeti bir bölmede aç'); return; }
   const fsd = t.closest('[data-fsend]'); if(fsd){ const i = +fsd.dataset.i, fs = sess(S.panes[i]); if(fs) fs.askFork = false; send(i, fsd.dataset.fsend === 'fork' ? {fork:true} : {force:true}); return; }
@@ -1352,7 +1376,7 @@ document.addEventListener('click', e => {
   const qc = t.closest('[data-qclear]'); if(qc){ const s = sess(qc.dataset.qclear); if(s){ s.queue = []; s.queuePaused = false; renderPanes(); } return; }
   const qr = t.closest('[data-qresume]'); if(qr){ const s = sess(qr.dataset.qresume); if(s){ s.queuePaused = false; renderPanes(); runQueue(s); } return; }
   const mc = t.closest('[data-mic]'); if(mc){ dictate(+mc.dataset.mic); return; }
-  const tp = t.closest('[data-tpl]'); if(tp){ const r = tp.getBoundingClientRect(); tplMenu(+tp.dataset.tpl, r.left, r.top - 60 - templates().length * 32); return; }
+  const tp = t.closest('[data-tpl]'); if(tp){ const r = tp.getBoundingClientRect(); tplMenu(+tp.dataset.tpl, r.left, r.top - 60 - templates().length * 32, {el: tp}); return; }
   const swp = t.closest('[data-swap]'); if(swp){ S.active = +swp.dataset.swap; SR.q = ''; const sq = $('#sq'); if(sq) sq.value = ''; renderRail(); setSearch(true); return; }
   const mo = t.closest('[data-more]'); if(mo){ const r = mo.getBoundingClientRect(); sessMenu(mo.dataset.more, r.left-160, r.bottom+4); return; }
   if(t.closest('[data-watch]')){ toast('Salt okuma modunda canlı izleniyor'); return; }
@@ -1361,7 +1385,7 @@ document.addEventListener('click', e => {
     S.sessions.push({...s, id, title:s.title+' (çatal)', status:'idle', ago:'şimdi', msgs:[...s.msgs], pinned:false, remote:false}); S.items.splice(S.items.indexOf(s.id)+1,0,id);
     openIn(id); toast('Oturum çatallandı'); return;
   }
-  if(t.closest('#btnSettings')){ const r = t.closest('#btnSettings').getBoundingClientRect(); settingsMenu(r.right + 6, r.bottom - 260); return; }
+  if(t.closest('#btnSettings')){ const r = t.closest('#btnSettings').getBoundingClientRect(); settingsMenu(r.right + 6, r.bottom - 260, {el: t.closest('#btnSettings'), side: 'right', align: 'end'}); return; }
   if(t.closest('#btnUpd')){ updateClick(); return; }
   if(t.closest('#btnSync')){ syncNow(); return; }
   if(t.closest('#btnTheme')){
@@ -1985,7 +2009,7 @@ function usageTrend(w){
   return `${pts.includes(' ') ? `<svg class="use-spark" viewBox="0 0 240 34" preserveAspectRatio="none"><line x1="0" y1="0.5" x2="240" y2="0.5"/><polyline points="${pts}"/></svg>` : ''}
     <div class="use-s use-f ${f && f.beforeReset && f.eta ? 'warn' : ''}">${esc(tip)}</div>`;
 }
-function usageMenu(x, y){
+function usageMenu(x, y, anchor){
   const ws = usageWins();
   const ago = USAGE ? Math.round((Date.now() - USAGE.at) / 6e4) : 0;
   menu(x, y, `<div class="mh">Kalan kullanım</div>${ws.length ? ws.map(w => { const pct = Math.round(w.u * 100), lvl = pct >= 90 ? 'hot' : pct >= 75 ? 'warm' : '';
@@ -1993,7 +2017,7 @@ function usageMenu(x, y){
       <div class="use-s">%${pct} kullanıldı${w.reset ? ' · sıfırlandı' : w.resetsAt ? ' · sıfırlanma ' + esc(fmtReset(w.resetsAt)) : ''}</div>${usageTrend(w)}</div>`; }).join('')
     : '<div class="use-s" style="padding:4px 9px 8px">Henüz bilgi yok: ilk yanıttan sonra Claude Code kalan kullanımı bildirir.</div>'}
     ${blocked() ? `<div class="use-s" style="padding:2px 9px;color:#c0392b">Limit doldu · ${esc(fmtReset(USAGE.resetsAt))} açılır</div>` : ''}
-    ${USAGE ? `<div class="use-s" style="padding:6px 9px 4px;border-top:1px solid var(--line);margin-top:4px">Son güncelleme: ${ago < 1 ? 'az önce' : ago < 60 ? ago + ' dk önce' : Math.round(ago / 60) + ' sa önce'} · her yanıttan sonra yenilenir</div>` : ''}`);
+    ${USAGE ? `<div class="use-s" style="padding:6px 9px 4px;border-top:1px solid var(--line);margin-top:4px">Son güncelleme: ${ago < 1 ? 'az önce' : ago < 60 ? ago + ' dk önce' : Math.round(ago / 60) + ' sa önce'} · her yanıttan sonra yenilenir</div>` : ''}`, anchor);
 }
 
 function onRun(p){
@@ -2202,10 +2226,10 @@ function insertTemplate(i, text){
   ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length); autosize(ta);
   const s = sess(S.panes[i]); if(s) s.inputDraft = ta.value; updateGhost(ta);
 }
-function tplMenu(i, x, y){
+function tplMenu(i, x, y, anchor){
   const ta = document.querySelector(`[data-ta="${i}"]`), cur = ta && ta.value.trim();
   menu(x, y, `<div class="mh">Şablonlar · yazarken / ile de açılır</div>${templates().map((t, k) => `<button data-m="tplins" data-i="${i}" data-k="${k}" title="${esc(t.text)}">${ic('bolt')}<span>${esc(t.name)}</span></button>`).join('')}
-    <hr>${cur ? `<button data-m="tplsave" data-i="${i}">${ic('plus')}Yazdığımı şablon yap</button>` : ''}<button data-m="tpledit">${ic('edit')}Şablonları düzenle…</button>`);
+    <hr>${cur ? `<button data-m="tplsave" data-i="${i}">${ic('plus')}Yazdığımı şablon yap</button>` : ''}<button data-m="tpledit">${ic('edit')}Şablonları düzenle…</button>`, anchor);
 }
 function saveTemplates(list){ WS.prefs = {...(WS.prefs||{}), templates: list}; GSRC.k = ''; persist(); }
 function openTemplates(){
@@ -2409,13 +2433,9 @@ function mediaCands(text, out){
   if(!text) return;
   for(const rx of MEDIA_RX){ rx.lastIndex = 0; for(const m of text.matchAll(rx)){ const c = (m[1] || m[0]).trim().replace(/^file:\/\//, ''); if(c) out.add(c); } }
 }
-function mediaAbs(c, cwd){
-  if(/^https?:/i.test(c)) return c;
-  if(/^(~|\/|[A-Za-z]:[\\/])/.test(c)) return c;
-  if(/\s/.test(c) || !cwd) return null;                 // boşluklu göreli metin büyük olasılıkla komuttur
-  const win = /^[A-Za-z]:\\/.test(cwd);
-  return cwd.replace(/[\\/]+$/, '') + (win ? '\\' : '/') + c.replace(/^\.[\\/]/, '');
-}
+// Yol çözme ve tekilleştirme mediapath.js'te: aynı dosyanın farklı yazımları (göreli / mutlak, / ile \, ~, harf büyüklüğü,
+// sondaki noktalama) tek anahtara iner, böylece her medya mesaj başına bir kez gösterilir.
+const HOME = API.home || '';
 const IEXT = 'png|jpe?g|gif|webp';
 const IMG_TXT_RX = [
   new RegExp(`[\`"“']([^\`"“”'\\n]{1,400}?\\.(?:${IEXT}))[\`"”']`, 'gi'),
@@ -2432,8 +2452,7 @@ function imgList(s, m){
     const txt = decodeEnt(b.v.replace(/<img[^>]*>/g, ' ').replace(/<code>([\s\S]*?)<\/code>/g, '`$1`').replace(/<br>|<\/(p|li|h\d|div|tr|blockquote)>/g, '\n').replace(/<[^>]+>/g, ' '));
     for(const rx of IMG_TXT_RX){ rx.lastIndex = 0; for(const x of txt.matchAll(rx)) set.add(x[1].trim().replace(/^file:\/\//, '')); }
   }
-  const cwd = s.cwd || s.project, list = [];
-  for(const c of set){ const a = mediaAbs(c, cwd); if(!a || /^https?:/i.test(a) || shown.has(a) || list.includes(a)) continue; list.push(a); if(list.length >= 6) break; }
+  const list = mediaPath.uniq(set, {cwd: s.cwd || s.project, home: HOME, skip: shown, web: false});
   IMG_MEMO.set(m, {sig, list}); return list;
 }
 const imgsHTML = (s, m) => { const l = imgList(s, m); return l.length ? `<div class="img-list">${l.map(p => `<img class="md-img" src="${esc(mediaSrc(p))}" data-mdimg="${esc(p)}" title="${esc(p)}" alt="" loading="lazy">`).join('')}</div>` : ''; };
@@ -2451,9 +2470,7 @@ function mediaList(s, m){
       mediaCands(decodeEnt(html.replace(/<code>[\s\S]*?<\/code>/g, ' ').replace(/<br>|<\/(p|li|h\d|div|tr|blockquote)>/g, '\n').replace(/<[^>]+>/g, ' ')), set);
     } else { mediaCands(b.a, set); mediaCands(b.o, set); }
   }
-  const cwd = s.cwd || s.project;
-  const seen = new Set(), list = [];
-  for(const c of set){ const a = mediaAbs(c, cwd); if(!a || seen.has(a)) continue; seen.add(a); list.push(a); if(list.length >= 6) break; }
+  const list = mediaPath.uniq(set, {cwd: s.cwd || s.project, home: HOME});
   MEDIA_MEMO.set(m, {sig, list});
   return list;
 }
@@ -2473,9 +2490,11 @@ const MEDIA_CACHE = new Map(), REMOTE_OK = new Set();
 const fmtDur = t => { if(!isFinite(t)) return ''; t = Math.round(t); const h = Math.floor(t/3600), mm = Math.floor(t%3600/60), ss = String(t%60).padStart(2,'0'); return h ? `${h}:${String(mm).padStart(2,'0')}:${ss}` : `${mm}:${ss}`; };
 function mediaMeta(el){ return [fmtDur(el.duration), el.videoWidth ? `${el.videoWidth}×${el.videoHeight}` : ''].filter(Boolean).join(' · '); }
 function showMedia(el){
-  const box = el.closest('.media'); if(!box || box.classList.contains('ok')) return;
+  const box = el.closest('.media'); if(!box || (box.classList.contains('ok') && !box.classList.contains('load'))) return;
   const sc = box.closest('.msgs'); const atBottom = sc && sc.scrollHeight - sc.scrollTop - sc.clientHeight < 80;
-  box.classList.add('ok'); box.querySelector('.media-meta').textContent = mediaMeta(el);
+  // Oynatıcı kutusu videonun kendi oranına oturur (styles.css .media.mv --ar): dikey video dar ve uzun, siyah boşluk kalmaz
+  if(el.videoWidth && el.videoHeight) box.style.setProperty('--ar', el.videoWidth + '/' + el.videoHeight);
+  box.classList.remove('load'); box.classList.add('ok'); box.querySelector('.media-meta').textContent = mediaMeta(el);
   if(atBottom) sc.scrollTop = sc.scrollHeight;
 }
 function hydrateMedia(root, prefix = ''){
@@ -2489,6 +2508,10 @@ function hydrateMedia(root, prefix = ''){
         box.querySelector('.media-el').innerHTML = `<button class="media-load" data-mload data-mpre="${esc(prefix)}">${ic(box.dataset.mkind==='v'?'video':'music')}<span>Uzak medya · <b>${esc(host)}</b><br><span>Yüklemek için tıkla — tıklayana kadar bu adrese istek gönderilmez</span></span></button>`; }
       return;
     }
+    // Bu kutu yamada yerinde kaldıysa oynatıcısı zaten içindedir: ikinci bir oynatıcı ekleme (kök neden: hydrateMedia
+    // bütün bölmeyi tarar, önbellekteki öğe bu kutuda bağlı olduğu için "başka yerde" sanılıp her yamada yenisi ekleniyordu)
+    const own = box.querySelector('.media-el > video, .media-el > audio');
+    if(own){ if(own._fail) box.remove(); else if(own._ok) showMedia(own); return; }
     let el = MEDIA_CACHE.get(key);
     if(!el || el.isConnected){
       el = document.createElement(box.dataset.mkind === 'v' ? 'video' : 'audio');
@@ -2496,6 +2519,8 @@ function hydrateMedia(root, prefix = ''){
       el.addEventListener('loadedmetadata', () => { el._ok = true; showMedia(el); });
       el.addEventListener('error', () => { el._fail = true; const b = el.closest('.media'); if(b) b.remove(); });
       el.src = box.dataset.msrc;
+      // Meta veri gecikirse (ağ sürücüsü) 16:9 yer tutucu kutu göster; bulunamayan dosya hızlı hata verir, hiç görünmez
+      setTimeout(() => { const b = !el._ok && !el._fail && el.closest('.media'); if(b && !b.classList.contains('ok')) b.classList.add('ok', 'load'); }, 400);
       if(!MEDIA_CACHE.has(key) || !MEDIA_CACHE.get(key).isConnected) MEDIA_CACHE.set(key, el);
     }
     if(el._fail){ box.remove(); return; }
@@ -2538,7 +2563,7 @@ function updateClick(){
   toast('Güncelleniyor — uygulama birkaç saniye içinde yeniden açılacak');
   API.update.install();
 }
-function settingsMenu(x, y){
+function settingsMenu(x, y, anchor){
   const st = UPD, line = st.phase==='ready' ? `Sürüm ${esc(st.latest)} kurulmaya hazır` : st.phase==='downloading' ? `Sürüm ${esc(st.latest)} indiriliyor · %${st.progress||0}` :
     st.phase==='checking' ? 'Denetleniyor…' : st.phase==='error' ? 'Son denetim başarısız' : st.phase==='disabled' ? 'Otomatik güncelleme: yalnızca Windows' : st.checkedAt ? 'Güncel' : '';
   menu(x, y, `<div class="mh">Claude Panel ${esc(APPV)}</div>
@@ -2548,7 +2573,7 @@ function settingsMenu(x, y){
     <button data-m="upddir">${ic('folder')}Güncelleme klasörü…</button>
     ${MIRROR && MIRROR.root?`<hr><button data-m="mirroropen" title="${esc(MIRROR.root)}">${ic('ext')}Diskteki kopyayı aç <span style="margin-left:auto;padding-left:12px;color:var(--faint);font-size:11px;max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" class="mono">${esc(MIRROR.root)}</span></button>`:''}
     <hr><button data-m="fontdlg">${ic('edit')}Yazı tipi…</button>
-    <button data-m="helpdlg">${ic('search')}Klavye kısayolları</button>`);
+    <button data-m="helpdlg">${ic('search')}Klavye kısayolları</button>`, anchor);
 }
 (async () => {
   try { APPV = (await API.info()).version; } catch {}
