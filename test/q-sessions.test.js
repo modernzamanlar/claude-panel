@@ -721,3 +721,92 @@ test('turnCard: wrap_up → sonraki adım kartı, update_plan → görev listesi
   assert.strictEqual(turnCard(null, {}), null);
   assert.strictEqual(turnCard('not_wrap_up_x', {}), null);
 });
+
+// ================= Sohbet görünümü: düşünme, görev listesi, alt ajan, arka plan görevleri =================
+const FX = require('./fixtures/sohbet-gorunumu');
+test('loadSession: örnek kayıtta düşünme, görev listesi, alt ajan ve arka plan görevleri', async () => {
+  const f = FX.write(newDir(), '/proje');
+  const d = await S.loadSession(f);
+  const a = d.msgs[1].b;
+  assert.deepEqual(a.filter(b => b.t === 'think'), [{ t: 'think', v: 'Geçmiş kaydı için önce görev listesini yazmalıyım.' }], 'yalnız signature olan blok atlanır');
+  const todo = a.filter(b => b.todo).map(b => b.todo.map(i => i.s).join(','));
+  assert.deepEqual(todo, ['in_progress,pending,pending', 'completed,in_progress,pending']);
+  assert.deepEqual(a.find(b => b.todo).todo[0], { c: 'Kayıtları oku', s: 'in_progress', af: 'Kayıtlar okunuyor' });
+  const ag = a.find(b => b.sa);
+  assert.equal(ag.id, undefined, 'araç kimliği atılır');
+  assert.deepEqual(ag.sa, { id: 'toolu_fx_ag1', ty: 'Explore', d: 'Kayıtları tara', st: 'done', tools: 3, aid: 'afix1', bg: true, ms: 4100 });
+  assert.deepEqual(d.bg.map(t => [t.id, t.k, t.st, t.code]), [['afix1', 'agent', 'done', null], ['bfix1', 'bash', 'done', 0]]);
+  assert.equal(d.bg[1].cmd, 'npm run build'); assert.equal(d.bg[0].cmd, '');
+  assert.deepEqual(d.todo.map(i => i.id), ['w0', 'w1', 'w2']);
+  assert.equal(d.msgs.length, 2, 'bildirimler kullanıcı mesajı olarak görünmez');
+});
+test('finishParse: alt ajan bilgisi kopyalanır (artımlı okumada sonradan gelen bildirim eski sonucu değiştirmez)', async () => {
+  const dir = newDir(), f = path.join(dir, FX.UUID + '.jsonl'), L = FX.lines('/p').map(o => JSON.stringify(o));
+  fs.writeFileSync(f, L.slice(0, 12).join('\n') + '\n');
+  const ld = new SessionLoader();
+  const d1 = await ld.load(f);
+  assert.equal(d1.msgs[1].b.find(b => b.sa).sa.st, 'run');
+  fs.appendFileSync(f, L.slice(12).join('\n') + '\n');
+  const d2 = await ld.load(f);
+  assert.equal(d2.msgs[1].b.find(b => b.sa).sa.st, 'done');
+  assert.equal(d1.msgs[1].b.find(b => b.sa).sa.st, 'run');
+  assert.equal(d1.bg[0].st, 'run');
+});
+test('bildirim: kullanıcı mesajı olarak gelen CLI bildirimi (önekli/öneksiz) işlenir; metnin ortasındaki etiket kullanıcı mesajı kalır', async () => {
+  const notif = (id, tu = 'tb') => `<task-notification>\n<task-id>${id}</task-id>\n<tool-use-id>${tu}</tool-use-id>\n<status>failed</status>\n<summary>Background command "x" failed with exit code 2</summary>\n</task-notification>`;
+  const f = jsonl([
+    { type: 'user', message: { content: 'başla' } },
+    { type: 'assistant', message: { content: [{ type: 'tool_use', id: 'tb', name: 'Bash', input: { command: 'make', run_in_background: true } }] } },
+    { type: 'user', message: { content: [{ type: 'tool_result', tool_use_id: 'tb', content: 'Command running in background with ID: bq1. Output…' }] } },
+    { type: 'user', message: { content: '[SYSTEM NOTIFICATION - NOT USER INPUT]\nBu otomatik.\n\n' + notif('bq1') } },
+    { type: 'user', message: { content: notif('bq2', 'tz') } },
+    { type: 'user', message: { content: 'şunu yapıştırdım: <task-notification>' } },
+    { type: 'attachment', attachment: { type: 'queued_command', prompt: 'düz komut' } },
+    { type: 'attachment', attachment: { type: 'queued_command', prompt: 5 } },
+    { type: 'attachment', attachment: { type: 'other' } },
+    { type: 'attachment' },
+  ]);
+  const d = await S.loadSession(f);
+  assert.deepEqual(d.msgs.filter(m => m.r === 'u').map(m => m.t), ['başla', 'şunu yapıştırdım: <task-notification>']);
+  assert.deepEqual(d.bg.map(t => [t.id, t.st, t.code]), [['bq1', 'err', 2], ['bq2', 'err', 2]]);
+});
+test('bildirim: araca bağlı bildirim alt ajan bloğunu bitirir; boş düşünme blokları atlanır', async () => {
+  const f = jsonl([
+    { type: 'user', message: { content: 'başla' } },
+    { type: 'assistant', message: { content: [{ type: 'tool_use', id: 'ta', name: 'Task', input: { description: 'd' } }, { type: 'thinking', thinking: '   ' }, { type: 'thinking' }] } },
+    { type: 'user', message: { content: [{ type: 'tool_result', tool_use_id: 'ta', content: 'patladı', is_error: true }] } },
+    { type: 'attachment', attachment: { type: 'queued_command', prompt: '<task-notification><task-id>zz</task-id><tool-use-id>ta</tool-use-id><status>completed</status><summary>Agent "d" completed</summary></task-notification>' } },
+    { type: 'attachment', attachment: { type: 'queued_command', prompt: '<task-notification><task-id>yy</task-id><tool-use-id>yok</tool-use-id><status>completed</status><summary>s</summary></task-notification>' } },
+  ]);
+  const d = await S.loadSession(f);
+  const b = d.msgs[1].b;
+  assert.equal(b.length, 1);
+  assert.equal(b[0].sa.ty, 'general-purpose');
+  assert.equal(b[0].sa.st, 'done');
+  assert.equal(b[0].err, true);
+});
+test('loadSubagent: agentId ile, meta.json (toolUseId) ile bulur; kimlik doğrulanır; dosya yoksa null', async () => {
+  const f = FX.write(newDir(), '/p');
+  const r = await S.loadSubagent(f, 'toolu_fx_ag1', 'afix1');
+  assert.equal(r.cut, 0);
+  assert.deepEqual(r.b.map(b => b.t === 'text' ? b.v : b.n), ['Kayıtlara **bakıyorum**.', 'Grep', 'Üç kayıt buldum.']);
+  assert.equal(r.b[1].o, 'src/a.js:1: kayıt');
+  assert.deepEqual(await S.loadSubagent(f, 'toolu_fx_ag1', null), r, 'meta.json üzerinden');
+  assert.deepEqual(await S.loadSubagent(f, 'toolu_fx_ag1', 'yok1'), r, 'agentId dosyası yoksa meta.json');
+  assert.deepEqual(await S.loadSubagent(f, 'toolu_fx_ag1', '../x'), r, 'geçersiz agentId yok sayılır');
+  assert.equal(await S.loadSubagent(f, '../../x', '../afix1'), null);
+  assert.equal(await S.loadSubagent(f, 'baska', null), null);
+  assert.equal(await S.loadSubagent(f, null, null), null);
+  const cut = await S.loadSubagent(f, null, 'afix1', 2);
+  assert.deepEqual([cut.cut, cut.b.length, cut.b[1].v], [1, 2, 'Üç kayıt buldum.']);
+  // Bozuk/başka meta dosyaları atlanır; meta var ama .jsonl yoksa null
+  const sub = path.join(f.replace(/\.jsonl$/, ''), 'subagents');
+  fs.writeFileSync(path.join(sub, 'agent-bozuk.meta.json'), '{');
+  fs.writeFileSync(path.join(sub, 'agent-bos.meta.json'), 'null');
+  fs.writeFileSync(path.join(sub, 'agent-kayip.meta.json'), JSON.stringify({ toolUseId: 'tk' }));
+  fs.writeFileSync(path.join(sub, 'notlar.txt'), 'x');
+  assert.equal(await S.loadSubagent(f, 'tk', null), null);
+  assert.equal((await S.loadSubagent(f, 'toolu_fx_ag1', null)).b.length, 3);
+  // Alt ajan klasörü olmayan oturum
+  assert.equal(await S.loadSubagent(jsonl([{ type: 'user', message: { content: 'x' } }]), 'toolu_x', null), null);
+});

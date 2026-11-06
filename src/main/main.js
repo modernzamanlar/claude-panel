@@ -6,7 +6,7 @@ protocol.registerSchemesAsPrivileged([{ scheme: 'cpmedia', privileges: { standar
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
-const { SessionIndex, SessionLoader, PROJECTS_DIR } = require('./sessions');
+const { SessionIndex, SessionLoader, PROJECTS_DIR, loadSubagent } = require('./sessions');
 const workspace = require('./workspace');
 const { createMirror } = require('./mirror');
 const { createUpdater } = require('./updater');
@@ -133,6 +133,8 @@ ipcMain.handle('changes:list', async (_e, id) => changes.list(await changesFile(
 ipcMain.handle('changes:diff', async (_e, id, p) => changes.diff(await changesFile(id), strArg(p)));
 ipcMain.handle('changes:revert', async (_e, id, p, opts) => changes.revert(await changesFile(id), strArg(p),
   { hash: opts && typeof opts.hash === 'string' ? opts.hash : '', ack: !!(opts && opts.ack === true) }));
+// Alt ajanın kaydı (blok açılınca): oturum dizinden bulunur, kimlikler sessions.loadSubagent'ta doğrulanır
+ipcMain.handle('session:subagent', (_e, id, toolId, agentId) => { const file = sessionFile(id); return file ? loadSubagent(file, toolId, agentId) : null; });
 ipcMain.handle('workspace:load', () => {
   const ws = workspace.load([() => mirror.readWorkspace()]); // asıl dosya ve yedek yoksa yansıdaki yapıdan dön
   if (!ws.firstRun) mirror.schedule(ws);
@@ -217,6 +219,7 @@ ipcMain.handle('claude:connectors', async () => {
 });
 ipcMain.handle('run:start', (_e, opts) => runner.start(opts));
 ipcMain.handle('run:stop', (_e, runId) => runner.stop(runId));
+ipcMain.handle('run:stopTask', (_e, runId, taskId) => runner.stopTask(runId, taskId));
 ipcMain.handle('run:respond', (_e, runId, requestId, response) => runner.respond(runId, requestId, response));
 ipcMain.handle('claude:remote', (_e, opts) => openRemoteTerminal(shell, opts));
 ipcMain.handle('claude:mcpList', (_e, cwd) => mcpList(cwd));

@@ -303,7 +303,13 @@ class Runner {
         if (ev.type === 'control_cancel_request') { run.pending.delete(ev.request_id); this.send('run:event', { runId, type: 'permission-cancel', requestId: ev.request_id }); continue; }
         if (ev.type === 'control_response') continue; // panelin gönderdiği kesme isteğinin yanıtı
         this.send('run:event', { runId, type: 'event', sessionId: run.sessionId, ev });
-        if (ev.type === 'result') this.endInput(run);
+        // Arka plan görevi sürerken giriş açık kalır: panel görevi durdurabilsin (stop_task). CLI görevler bitince
+        // bildirimi yeni bir turda işler; liste boşalınca giriş kapanır. Bu olayı göndermeyen CLI'de eskisi gibi.
+        if (ev.type === 'system' && ev.subtype === 'background_tasks_changed' && Array.isArray(ev.tasks)) {
+          run.bgCount = ev.tasks.length;
+          if (run.resultSeen && !run.bgCount) this.endInput(run);
+        }
+        if (ev.type === 'result') { run.resultSeen = true; if (!run.bgCount) this.endInput(run); }
       }
     });
     proc.stderr.setEncoding('utf8');
@@ -356,6 +362,13 @@ class Runner {
       setTimeout(() => { this.endInput(run); killTree(run.proc, 'SIGINT'); }, 2500),
       setTimeout(() => killTree(run.proc, 'SIGTERM'), 5500),
       setTimeout(() => killTree(run.proc, 'SIGKILL'), 9000));
+    return true;
+  }
+  /** Arka plan görevini durdur: CLI'nin stop_task denetim isteği (giriş açıkken). Gönderilemezse false. */
+  stopTask(runId, taskId) {
+    const run = this.runs.get(runId);
+    if (!run || run.inputEnded || !/^[\w-]{1,80}$/.test(String(taskId))) return false;
+    this.write(run, { type: 'control_request', request_id: crypto.randomUUID(), request: { subtype: 'stop_task', task_id: String(taskId) } });
     return true;
   }
   stopAll() { for (const id of [...this.runs.keys()]) this.stop(id); }

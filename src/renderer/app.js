@@ -800,14 +800,18 @@ function msgHTML(s, m, mi){
   const out = []; let grp = [], gi = 0;
   const flush = () => { if(grp.length){ out.push(toolGroupHTML(grp, s.id + '|' + mi + '|' + gi++)); grp = []; } };
   const last = mi === s.msgs.length - 1 && !s.run;
-  for(const b of m.b){
+  const lastTodo = SV.lastTodo(m.b);
+  for(const [k, b] of m.b.entries()){
     if(b.t === 'text'){ flush(); out.push(linkPaths(b.v)); }
+    else if(b.t === 'think'){ flush(); out.push(SV.thinkHTML(s, mi + '|' + k, b.v)); }
+    else if(b.todo){ flush(); out.push(SV.todoHTML(b.todo, b === lastTodo)); }
+    else if(b.sa){ flush(); out.push(toolHTML(b) + SV.agentHTML(s, b.sa)); }
     else if(b.card){ flush(); out.push(nextCard(s, b.card, last)); }
     else if('plan' in b){ if(b.plan){ flush(); out.push(planCard(b.plan)); } }   // listesiz ilerleme güncellemeleri gösterilmez
     else grp.push(b);
   }
   flush();
-  return `<div class="a">${out.join('')}${m.draft?md(m.draft):''}${m.streaming?'<span class="cursor"></span>':''}${imgsHTML(s, m)}${mediaHTML(s, m, mi, 'a')}</div>`;
+  return `<div class="a">${out.join('')}${m.think ? SV.thinkHTML(s, mi + '|live', m.think, true) : ''}${m.draft?md(m.draft):''}${m.streaming?'<span class="cursor"></span>':''}${imgsHTML(s, m)}${mediaHTML(s, m, mi, 'a')}</div>`;
 }
 const renderMsgs = s => msgParts(s).map(p => `<div class="mw">${p}</div>`).join('');
 // Parçaları kaba yerleştirir: aynı içerikli eski düğümler yeniden kullanılır (taşınır), yalnızca yeni/değişen parça çizilir.
@@ -990,6 +994,7 @@ function renderInfo(){
       ${!S.connOpen ? '' : `<div class="conn-list">${connRows(s, conns)}<button class="act" data-mcpcheck style="margin-top:6px;font-size:12px">${S.mcpCheck && S.mcpCheck.loading ? 'Kontrol ediliyor…' : 'Durumu şimdi kontrol et'}</button></div>`}
     </div>
     ${mediaSection(s)}
+    ${SV.bgSection(s)}
     <div class="isec"><h4>Çıktılar <button class="act cx-open" data-cxopen="${s.id}" title="Bu sohbette değişen dosyalar, fark ve geri alma">Değişen dosyalar</button></h4>
       ${s.outputs.length ? s.outputs.map(o=>`<div class="irow">${ic(/\.html?$/.test(o)?'globe':/\.(md|txt|docx)$/.test(o)?'note':'file')}<span class="lbl" title="${esc(o)}">${esc(o.split(/[\\/]/).pop())}</span><span class="ok mono odir">${esc(/[\\/]/.test(o)?o.split(/[\\/]/).slice(0,-1).join('/'):'')}</span></div>`).join('') : '<div style="color:var(--faint);font-size:12.5px">Bu oturumda henüz dosya oluşturulmadı.</div>'}
     </div>`;
@@ -1348,6 +1353,7 @@ document.addEventListener('click', e => {
   if(t.closest('#fxBody') && !t.closest('button')){ if(FX.sel.size){ FX.sel.clear(); paintSel(); } return; }
   const sl = t.closest('[data-slot]'); if(sl){ S.active = +sl.dataset.slot; setOrg(false); render(); return; }
   const lb = t.closest('#layouts button'); if(lb){ S.layout = +lb.dataset.l; if(S.active >= nPanes()) S.active=0; render(); return; }
+  if(SV.click(t)) return;
   const tgh = t.closest('.tg-h'); if(tgh){ const g = tgh.parentNode, k = g.dataset.tg; g.classList.toggle('open') ? TGOPEN.add(k) : TGOPEN.delete(k); return; }
   const th = t.closest('.tool-h'); if(th){ th.parentNode.classList.toggle('open'); return; }
   const op = t.closest('[data-open]'); if(op){ openIn(op.dataset.open, +op.dataset.into); return; }
@@ -1716,7 +1722,8 @@ async function ensureLoaded(id, force){
       const d = await API.sessions.load(s.uuid, 60);
       // Yükleme sürerken gönderilen mesaj ve canlı yanıt (local) korunur; tur bitince diskteki kayıt onları zaten içerir
       const keep = s.run ? s.msgs.filter(m => m.local) : [];
-      s.msgs = d.msgs.map(m => m.r==='u' ? m : {r:'a', b:m.b.map(b => b.t==='text' ? {t:'text', v:mdMemo(b.v)} : {...b, n:shortTool(b.n)})});
+      s.msgs = d.msgs.map(m => m.r==='u' ? m : {r:'a', b:m.b.map(b => b.t==='text' ? {t:'text', v:mdMemo(b.v)} : b.t==='think' ? b : {...b, n:shortTool(b.n)})});
+      SV.loaded(s, d);
       s.msgs.push(...keep);
       s.outputs = d.outputs.map(o => o.path); s.skipped = d.skipped; s.turns = d.turns; s.loadErr = null;
     } catch(e){ if(!s.msgs.length) s.loadErr = String(e && e.message || e); else console.warn('yeniden yüklenemedi', e); }
@@ -1931,7 +1938,7 @@ async function sendNow(s, text, att, opt = {}){
   s.attach = [];
   const live = {r:'a', b:[], streaming:true, draft:'', local:true}; s.msgs.push(live);
   const runId = crypto.randomUUID();
-  s.run = {runId, live, tools:new Map(), fork:!!opt.fork, prevStatus:s.status, startedAt:Date.now()};
+  s.run = {runId, live, tools:new Map(), fork:!!opt.fork, prevStatus:s.status, startedAt:Date.now()}; SV.runStart(s);
   s.status = 'running'; s.ago = 'şimdi'; s.lastTs = new Date().toISOString(); s.fresh = false;
   RUNS.set(runId, s.id);
   render(); { const pi = S.panes.indexOf(s.id); if(pi >= 0) scrollPaneBottom(pi); }
@@ -2046,7 +2053,7 @@ function onRun(p){
       return;
     }
     if(ev.type === 'rate_limit_event'){ onRateLimit(ev.rate_limit_info); return; }
-    if(ev.parent_tool_use_id) return; // alt ajan mesajları
+    if(SV.onEvent(s, ev)) return; // alt ajan mesajları, arka plan görevi olayları, düşünme akışı
     if(ev.type === 'stream_event' && ev.event){
       const e = ev.event;
       if(e.type === 'content_block_start' && e.content_block && e.content_block.type === 'text') L.draft = '';
@@ -2056,14 +2063,16 @@ function onRun(p){
     if(ev.type === 'assistant' && ev.message){
       for(const c of ev.message.content || []){
         if(c.type === 'text' && c.text && c.text.trim()){ L.b.push({t:'text', v:md(c.text)}); L.draft = ''; }
-        else if(c.type === 'tool_use'){ const tool = {t:'tool', n:shortTool(c.name), a:toolSum(c.input), o:'', running:true, ...(turnCard(c.name, c.input) || {})}; const dd = diffView.data(c.name, c.input); if(dd) tool.d = dd; L.b.push(tool); R.tools.set(c.id, tool);
+        else if(c.type === 'thinking') SV.thinkBlock(s, c);
+        else if(c.type === 'tool_use'){ const tool = {t:'tool', n:shortTool(c.name), a:toolSum(c.input), o:'', running:true, ...(turnCard(c.name, c.input) || {})}; const dd = diffView.data(c.name, c.input); if(dd) tool.d = dd; L.b.push(tool); R.tools.set(c.id, tool); SV.toolUse(s, c, tool);
           const fp = c.input && (c.input.file_path || c.input.notebook_path); if(fp && /^(Write|Edit|MultiEdit|NotebookEdit)$/.test(c.name) && !s.outputs.includes(fp)) s.outputs.unshift(fp); }
       }
       const u = ev.message.usage; if(u && ev.message.model !== '<synthetic>') s.ctx = ((u.input_tokens||0) + (u.cache_read_input_tokens||0) + (u.cache_creation_input_tokens||0) + (u.output_tokens||0)) / 1000;
       scheduleLive(s); return;
     }
     if(ev.type === 'user' && ev.message && Array.isArray(ev.message.content)){
-      for(const c of ev.message.content) if(c.type === 'tool_result'){ const t = R.tools.get(c.tool_use_id); if(t){ t.o = resText(c.content).slice(0,1500); t.running = false; if(c.is_error) t.err = true; const im = liveImgs(c.content); if(im.length) t.imgs = im; } }
+      for(const c of ev.message.content) if(c.type === 'tool_result'){ const t = R.tools.get(c.tool_use_id); if(t){ t.o = resText(c.content).slice(0,1500); t.running = false; if(c.is_error) t.err = true; const im = liveImgs(c.content); if(im.length) t.imgs = im; }
+        SV.toolResult(s, c, t, ev.tool_use_result); }
       scheduleLive(s); return;
     }
     if(ev.type === 'result'){ R.result = ev; return; }
@@ -2076,7 +2085,7 @@ function onRun(p){
 function finishRun(s, p){
   const R = s.run, L = R.live, res = R.result;
   L.streaming = false; if(L.draft){ L.b.push({t:'text', v:md(L.draft)}); L.draft = ''; }
-  R.tools.forEach(t => t.running = false);
+  R.tools.forEach(t => t.running = false); SV.runEnd(s, p);
   const resultText = res && typeof res.result === 'string' ? res.result : '';
   const authFail = /authenticat|OAuth|log ?in|\/login/i.test(resultText + ' ' + (p.stderr || '') + ' ' + L.b.map(b => b.v||'').join(' ')) && (!res || res.is_error || res.terminal_reason === 'api_error');
   if(p.stopped) L.b.push({t:'text', v:'<p class="run-note">⏹ Durduruldu</p>'});
