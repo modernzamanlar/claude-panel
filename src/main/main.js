@@ -264,6 +264,26 @@ ipcMain.handle('app:dictate', () => new Promise(resolve => {
   const c = dictateCommand(process.platform); if (!c) return resolve({ ok: false, platform: process.platform });
   require('child_process').execFile(c.cmd, c.args, { windowsHide: true, timeout: 15000 }, err => resolve({ ok: !err, error: err ? String(err.message).slice(0, 200) : null }));
 }));
+// ---------- Claude ayarları (CLAUDE.md, settings.json, eklentiler, ajanlar) — yalnız bilinen dosyalar, bkz. claudecfg.js ----------
+const ccfg = require('./claudecfg').createClaudeCfg();
+ipcMain.handle('ccfg:list', (_e, cwd) => ({ files: ccfg.list(cwd), roots: ccfg.roots }));
+ipcMain.handle('ccfg:read', (_e, key, cwd) => ccfg.read(key, cwd));
+ipcMain.handle('ccfg:write', (_e, key, cwd, text, o) => ccfg.write(key, cwd, text, { expectHash: o && o.expectHash, force: !!(o && o.force) }));
+ipcMain.handle('ccfg:note', (_e, scope, cwd, note) => ccfg.appendMemory(scope, cwd, note));
+ipcMain.handle('ccfg:extras', (_e, cwd) => ({ styles: ccfg.outputStyles(cwd), agents: ccfg.agents(cwd), plugins: ccfg.plugins() }));
+ipcMain.handle('ccfg:openAgent', async (_e, scope, file, cwd) => !(await shell.openPath(ccfg.agentPath(scope, file, cwd))));
+// Sohbeti Markdown olarak dışa aktar: metni arayüz üretir (claudecfg-core.toMarkdown), yeri kullanıcı kaydetme diyaloğunda seçer
+ipcMain.handle('ccfg:export', async (_e, name, text) => {
+  if (typeof text !== 'string' || typeof name !== 'string') throw new Error('Geçersiz dışa aktarma');
+  const safe = path.basename(name).replace(/[\\/:*?"<>|]/g, '') || 'sohbet.md';
+  // selftest: diyalog açılmaz (test asılı kalmasın), SELFTEST_EXPORT_DIR'e (yoksa SELFTEST_OUT'a) yazılır
+  const target = SELFTEST ? path.join(process.env.SELFTEST_EXPORT_DIR || process.env.SELFTEST_OUT || os.tmpdir(), safe) : null;
+  const r = target ? { canceled: false, filePath: target } : await dialog.showSaveDialog(win, { title: 'Sohbeti Markdown olarak kaydet', defaultPath: path.join(HOME, 'Desktop', safe), filters: [{ name: 'Markdown', extensions: ['md'] }] });
+  if (r.canceled || !r.filePath) return null;
+  const fp = /\.md$/i.test(r.filePath) ? r.filePath : r.filePath + '.md';
+  fs.writeFileSync(fp, text, 'utf8');
+  return fp;
+});
 ipcMain.handle('app:info', () => ({ projectsDir: PROJECTS_DIR, workspaceFile: workspace.FILE, version: app.getVersion(), selftest: SELFTEST }));
 
 // ---------- Canlı izleme ----------

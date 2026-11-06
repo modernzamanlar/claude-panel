@@ -1193,6 +1193,7 @@ function sessMenu(id, x, y){
     <button data-m="ql" data-id="${id}">${ic('search')}Önizle (Boşluk)</button>
     <button data-m="changes" data-id="${id}">${ic('edit')}Değişen dosyalar</button>
     <button data-m="movedlg" data-id="${id}">${ic('folder')}Taşı…</button>
+    ${window.CCUI ? '<hr>' + CCUI.menuItems(id) : ''}
     <hr><button data-m="trash" data-id="${id}" style="color:#c0392b">${ic('trash')}Çöp Kutusuna taşı</button>`);
 }
 function folderMenu(fid, x, y){
@@ -1215,6 +1216,7 @@ document.addEventListener('click', e => {
   const m = t.closest('.menu [data-m]');
   if(m && m.dataset.m==='tema'){ closeMenu(); WS.prefs = Tema.choose(WS.prefs, m.dataset.v); applyTheme(WS.prefs); persist(); return; }
   if(m && m.dataset.m==='upddef'){ closeMenu(); API.update.resetDir().then(st => { UPD = st; if(st.dirInfo) UPDDIR = st.dirInfo; paintUpd(); updToast(st, true); }); return; }
+  if(m && /^cc[A-Z]/.test(m.dataset.m) && window.CCUI){ closeMenu(); CCUI.onMenu(m.dataset); return; } // Claude ayarları / dışa aktarım / # notu (claudecfg-ui.js)
   if(m && /^(updcheck|upddir|updgo|mirroropen|helpdlg|fontdlg)$/.test(m.dataset.m)){ const k = m.dataset.m; closeMenu();
     if(k==='fontdlg') openFonts();
     if(k==='updcheck') updCheck();
@@ -1885,6 +1887,7 @@ async function send(i, opt = {}){
   const s = sess(S.panes[i]); const ta = document.querySelector(`[data-ta="${i}"]`);
   if(!s || !ta) return;
   const text = ta.value.trim(); const att = s.attach || []; if(!text && !att.length) return;
+  if(window.CCUI && CCUI.sendHook(i, s, text, ta)) return; // "#" ile başlayan tek satır: gönderilmez, CLAUDE.md'ye not olarak eklenir
   if(!S.auth || !S.auth.loggedIn){ await checkAuth(); if(!S.auth.loggedIn){ toast('Önce Claude Code girişi yapılmalı'); return; } }
   if(s.run){ // çalışırken yazılan mesaj sıraya girer; tur bitince sırayla gönderilir
     (s.queue = s.queue || []).push({text, att}); s.queuePaused = false;
@@ -2588,7 +2591,7 @@ function settingsMenu(x, y, anchor){
     <button data-m="upddir">${ic('folder')}Güncelleme klasörü…</button>
     ${updDirRow()}
     ${MIRROR && MIRROR.root?`<hr><button data-m="mirroropen" title="${esc(MIRROR.root)}">${ic('ext')}Diskteki kopyayı aç <span style="margin-left:auto;padding-left:12px;color:var(--faint);font-size:11px;max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" class="mono">${esc(MIRROR.root)}</span></button>`:''}
-    <hr><button data-m="fontdlg">${ic('edit')}Yazı tipi…</button>
+    <hr>${window.CCUI ? `<button data-m="ccOpen">${ic('sliders')}Claude ayarları…</button>` : ''}<button data-m="fontdlg">${ic('edit')}Yazı tipi…</button>
     <button data-m="helpdlg">${ic('search')}Klavye kısayolları</button>
     ${themeRows()}`, anchor);
 }

@@ -35,6 +35,9 @@ const clean = () => {
   if (fs.existsSync(D)) console.log('Geçici klasör silinemedi: ' + D);
 };
 for (const d of ['home', 'mirror', 'out', 'ud']) fs.mkdirSync(path.join(D, d));
+// Claude ayarları adımları (extra/claude-ayarlari.js) gerçek ~/.claude yerine bu geçici Claude ev klasörünü kullanır
+fs.mkdirSync(path.join(D, 'export'));
+require('child_process').execFileSync(process.execPath, [path.join(__dirname, 'claude-home-fixture.js'), path.join(D, 'claude-home')], { stdio: 'ignore' });
 // Her çalıştırmanın kendi Electron kullanıcı veri klasörü: aynı anda koşan testler (mac + win, başka dallar) kilitlenmesin
 const UD = path.join(D, 'ud');
 const TIMEOUT = +process.env.UITEST_TIMEOUT_MS || 5 * 60 * 1000; // asılı kalan açılış sonsuza dek beklenmez
@@ -62,6 +65,7 @@ function electron(steps, log) {
     CLAUDE_PANEL_UI_PLATFORM: win ? 'win32' : 'darwin',
     CLAUDE_PANEL_CLAUDE_BIN: FAKE, FAKE_PERM: '1', FAKE_DELAY: '80', // ikinci açılışta da: gerçek claude hiç çağrılmaz
     CLAUDE_PANEL_HOME: path.join(D, 'home'), CLAUDE_PANEL_MIRROR: path.join(D, 'mirror'), SELFTEST_OUT: path.join(D, 'out'),
+    CLAUDE_PANEL_CLAUDE_HOME: path.join(D, 'claude-home'), SELFTEST_EXPORT_DIR: path.join(D, 'export'),
     SELFTEST_STEPS: steps,
     TMPDIR: D + path.sep, TEMP: D, TMP: D, // uygulamanın geçici dosyaları da bu klasöre (POSIX TMPDIR, Windows TEMP/TMP)
   };

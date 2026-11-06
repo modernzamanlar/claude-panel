@@ -55,6 +55,15 @@ contextBridge.exposeInMainWorld('api', {
     control: () => ipcRenderer.invoke('claude:control'),
     installDesktop: () => ipcRenderer.invoke('claude:installDesktop'),
   },
+  ccfg: {
+    list: cwd => ipcRenderer.invoke('ccfg:list', cwd),
+    read: (key, cwd) => ipcRenderer.invoke('ccfg:read', key, cwd),
+    write: (key, cwd, text, o) => ipcRenderer.invoke('ccfg:write', key, cwd, text, o),
+    note: (scope, cwd, note) => ipcRenderer.invoke('ccfg:note', scope, cwd, note),
+    extras: cwd => ipcRenderer.invoke('ccfg:extras', cwd),
+    openAgent: (scope, file, cwd) => ipcRenderer.invoke('ccfg:openAgent', scope, file, cwd),
+    exportMd: (name, text) => ipcRenderer.invoke('ccfg:export', name, text),
+  },
   run: {
     start: opts => ipcRenderer.invoke('run:start', opts),
     stop: runId => ipcRenderer.invoke('run:stop', runId),
