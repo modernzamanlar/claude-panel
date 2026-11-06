@@ -247,7 +247,9 @@ function resultText(content) {
  * Ayrıca Write/Edit/NotebookEdit ile değiştirilen dosyaları "çıktılar" olarak toplar.
  */
 // Ayrıştırma durumu satır satır beslenir; tam okuma (loadSession) ve artımlı okuma (SessionLoader) aynı kodu kullanır.
-const newParse = () => ({ msgs: [], toolById: new Map(), outputs: new Map(), turns: 0 });
+// lastA: son asistan kaydının uuid'si. Kullanıcı mesajına `at` olarak yazılır: mesajı düzenleyip oradan devam ederken
+// CLI'ye --resume-session-at <at> verilir ('' = sohbetin başı, önünde asistan mesajı yok). uuid'siz kayıtta `at` olmaz.
+const newParse = () => ({ msgs: [], toolById: new Map(), outputs: new Map(), turns: 0, lastA: null });
 function feedLine(st, line) {
   if (!line) return;
   let e; try { e = JSON.parse(line); } catch { return; }
@@ -265,11 +267,13 @@ function feedLine(st, line) {
     const t = userText(c);
     if (isNoise(t)) return;
     const um = { r: 'u', t: t.slice(0, 8000), ts: e.timestamp }; const uim = imagesOf(c); if (uim.length) um.imgs = uim;
+    if (e.uuid && t.length <= 8000) um.at = st.lastA || ''; // kısaltılmış metin düzenlemeye açılmaz (eksik gönderilmesin)
     st.msgs.push(um);
     st.turns++;
     return;
   }
   if (e.type === 'assistant' && e.message && Array.isArray(e.message.content)) {
+    if (typeof e.uuid === 'string' && e.uuid) st.lastA = e.uuid;
     let last = st.msgs[st.msgs.length - 1];
     if (!last || last.r !== 'a') { last = { r: 'a', b: [], ts: e.timestamp }; st.msgs.push(last); }
     for (const c of e.message.content) {

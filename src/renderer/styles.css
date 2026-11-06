@@ -777,3 +777,18 @@ img.dog8{image-rendering:pixelated;image-rendering:crisp-edges;display:block}
 .pane.compact .pill{padding:3px 6px}
 .pane.compact .pill[data-effort] span{display:none}
 .ibtn.mic{margin-left:2px}
+
+/* Mesajı düzenle ve oradan devam et: kalem düğmesi üzerine gelince görünür; düzenleyici balonun yerine geçer */
+.u-line{display:flex;justify-content:flex-end;align-items:flex-start;gap:4px}
+.u-line .u{align-self:auto;min-width:0}
+.ue-btn{width:26px;height:26px;flex:none;margin-top:3px;opacity:0;transition:opacity .12s}
+.ue-btn svg{width:14px;height:14px}
+.u-line:hover .ue-btn,.ue-btn:focus-visible{opacity:1}
+.ue-btn:disabled{cursor:not-allowed;opacity:0}
+.u-line:hover .ue-btn:disabled{opacity:.4}
+.ue-btn:disabled:hover{background:none;color:var(--muted)}
+.u.ue-box{align-self:stretch;max-width:none;max-height:none;overflow:visible;display:flex;flex-direction:column;gap:8px;white-space:normal;box-shadow:0 0 0 1.5px var(--accent)}
+.ue-ta{width:100%;min-height:60px;max-height:50vh;resize:vertical;border:0;outline:0;background:transparent;font:inherit;color:inherit;padding:0;white-space:pre-wrap}
+.ue-acts{display:flex;align-items:center;gap:6px}
+.ue-hint{flex:1;font-size:11.5px;color:var(--muted);line-height:1.35}
+.ue-acts .btn{padding:4px 10px;font-size:12px}

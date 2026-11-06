@@ -2,6 +2,8 @@
 // Testler için sahte `claude` CLI: stream-json olaylarını ve izin (control_request) protokolünü
 // gerçek CLI'ye benzer sırayla üretir. Ortam değişkenleri:
 //   FAKE_DELAY=ms  FAKE_PERM=1 (Bash için izin ister)  FAKE_ASK=1 (AskUserQuestion)  FAKE_AUTH_FAIL=1  FAKE_LOGGED_OUT=1
+// --resume-session-at <uuid>: gerçek CLI gibi --resume ister; panel her zaman --fork-session ile verir (yoksa hata).
+//   Yanıt metni devam noktasının ilk 8 karakterini içerir: "(… noktasından)".
 const crypto = require('crypto');
 const args = process.argv.slice(2);
 if (args[0] === 'auth' && args[1] === 'status') { console.log(JSON.stringify({ loggedIn: process.env.FAKE_LOGGED_OUT ? false : true, authMethod: 'fake' })); process.exit(0); }
@@ -9,6 +11,8 @@ if (args[0] === 'mcp' && args[1] === 'list') { console.log('Checking MCP server 
 const arg = n => { const i = args.indexOf(n); return i >= 0 ? args[i + 1] : null; };
 let sid = arg('--session-id') || arg('--resume') || crypto.randomUUID();
 if (args.includes('--fork-session')) sid = crypto.randomUUID();
+const at = arg('--resume-session-at');
+if (at && (!arg('--resume') || !args.includes('--fork-session'))) { console.error('--resume-session-at için --resume ve --fork-session gerekli'); process.exit(3); }
 const delay = +(process.env.FAKE_DELAY || 80);
 const out = o => process.stdout.write(JSON.stringify(o) + '\n');
 const wait = ms => new Promise(r => setTimeout(r, ms));
@@ -49,7 +53,7 @@ async function turn(msg) {
     out({ type: 'result', subtype: 'success', is_error: true, result: 'Failed to authenticate', terminal_reason: 'api_error', session_id: sid });
     return process.exit(1);
   }
-  const reply = `Aldım: "${text.split('\n')[0]}"${images ? ` (+${images} görsel)` : ''}. Panelden yazıyorum.`;
+  const reply = `Aldım: "${text.split('\n')[0]}"${images ? ` (+${images} görsel)` : ''}${at ? ` (${at.slice(0, 8)} noktasından)` : ''}. Panelden yazıyorum.`;
   out({ type: 'stream_event', session_id: sid, event: { type: 'content_block_start', index: 0, content_block: { type: 'text', text: '' } } });
   for (const part of reply.match(/.{1,6}/g)) { out({ type: 'stream_event', session_id: sid, event: { type: 'content_block_delta', index: 0, delta: { type: 'text_delta', text: part } } }); await wait(delay / 4); }
   out({ type: 'assistant', session_id: sid, message: { model: 'claude-opus-5-5', content: [{ type: 'text', text: reply }], usage: { input_tokens: 5, cache_read_input_tokens: 42000, output_tokens: 20 } } });
