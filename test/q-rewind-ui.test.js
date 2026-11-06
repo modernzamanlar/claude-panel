@@ -44,6 +44,9 @@ test('fileRows: çalışma klasörüne göre göreli; dışındaki tam yol; geç
   assert.deepEqual(R.fileRows(['/u/pp/a.js'], '/u/p'), [{ path: '/u/pp/a.js', name: 'a.js', dir: '/u/pp' }], 'önek değil klasör sınırı');
   assert.deepEqual(R.fileRows(['/a.js'], ''), [{ path: '/a.js', name: 'a.js', dir: '' }]);
   assert.deepEqual(R.fileRows(null, null), []);
+  assert.deepEqual(R.fileRows(['C:\\Users\\U\\İş\\src\\a.js', 'C:\\Users\\U\\İş'], 'c:/Users/U/İş/'), [
+    { path: 'C:\\Users\\U\\İş\\src\\a.js', name: 'a.js', dir: 'src' }, { path: 'C:\\Users\\U\\İş', name: 'İş', dir: 'C:/Users/U' }], 'ayraç ve sürücü yolunda harf büyüklüğü; klasörün kendisi göreli değil');
+  assert.deepEqual(R.fileRows(['/U/p/a.js'], '/u/p'), [{ path: '/U/p/a.js', name: 'a.js', dir: '/U/p' }], 'POSIX yolunda harf büyüklüğü önemli');
 });
 
 test('changeSummary', () => {

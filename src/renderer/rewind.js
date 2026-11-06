@@ -15,10 +15,12 @@
   const SUFFIX = ' (düzenlendi)';
   const forkTitle = t => { t = String(t || 'Sohbet'); return t.endsWith(SUFFIX) ? t : t + SUFFIX; };
   // Dosya listesi: çalışma klasörünün içindeyse göreli gösterilir
+  // Karşılaştırmada ayraçlar "/" sayılır; Windows sürücü yolunda (C:) büyük/küçük harf fark etmez
+  const cmpKey = p => { p = p.replace(/\\/g, '/'); return /^[A-Za-z]:\//.test(p) ? p.toLowerCase() : p; };
   function fileRows(files, cwd){
-    const base = String(cwd || '').replace(/[\\/]+$/, '');
+    const base = String(cwd || '').replace(/[\\/]+$/, ''), bk = cmpKey(base) + '/';
     return (files || []).filter(f => typeof f === 'string' && f).map(f => {
-      const inCwd = base && (f.startsWith(base + '\\') || f.startsWith(base + '/'));
+      const inCwd = base && f.length > base.length + 1 && cmpKey(f.slice(0, base.length + 1)) === bk;
       const rel = inCwd ? f.slice(base.length + 1) : f;
       const parts = rel.split(/[\\/]/);
       return {path: f, name: parts.pop(), dir: parts.join('/')};
