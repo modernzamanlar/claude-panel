@@ -1,0 +1,78 @@
+{
+ "is_error": false,
+ "duration_api_ms": 0,
+ "num_turns": 0,
+ "stop_reason": null,
+ "session_id": "8d2bcd77-64de-4e74-8307-f22da67c681f",
+ "total_cost_usd": 0.0214543,
+ "usage": {
+  "output_tokens_details": {
+   "thinking_tokens": 0
+  },
+  "input_tokens": 0,
+  "cache_creation_input_tokens": 0,
+  "cache_read_input_tokens": 0,
+  "output_tokens": 0,
+  "server_tool_use": {
+   "web_search_requests": 0,
+   "web_fetch_requests": 0
+  },
+  "service_tier": "standard",
+  "cache_creation": {
+   "ephemeral_1h_input_tokens": 0,
+   "ephemeral_5m_input_tokens": 0
+  },
+  "inference_geo": "",
+  "iterations": [],
+  "speed": "standard",
+  "fallback_credit": null
+ },
+ "modelUsage": {
+  "claude-haiku-4-5-20251001": {
+   "inputTokens": 10,
+   "outputTokens": 42,
+   "thinkingTokens": 36,
+   "cacheReadInputTokens": 22383,
+   "cacheCreationInputTokens": 9498,
+   "webSearchRequests": 0,
+   "costUSD": 0.0214543,
+   "contextWindow": 200000,
+   "maxOutputTokens": 32000
+  }
+ },
+ "permission_denials": [],
+ "fast_mode_state": "off",
+ "fast_mode_disabled_reason": "sdk_opt_in_required",
+ "subagent_stats": {
+  "spawned": 0,
+  "requested": {
+   "background": 0,
+   "foreground": 0,
+   "unset": 0
+  },
+  "started_in_background": 0,
+  "max_depth": 0,
+  "spawned_by_subagents": 0,
+  "completed": 0,
+  "failed": 0,
+  "killed": {
+   "parent": 0,
+   "user": 0,
+   "system": 0
+  },
+  "refused": {
+   "depth_limit": 0,
+   "concurrency_limit": 0,
+   "budget": 0
+  },
+  "by_type": {}
+ },
+ "subtype": "success",
+ "result": "## Context Usage\n\n**Model:** claude-opus-5-5[1m]  \n**Tokens:** 40.8k / 1m (4%)\n\n### Estimated usage by category\n\n| Category | Tokens | Percentage |\n|----------|--------|------------|\n| System prompt | 9.1k | 0.9% |\n| System tools | 16.7k | 1.7% |\n| MCP tools | 592 | 0.1% |\n| MCP server instructions | 2.2k | 0.2% |\n| MCP tools (deferred) | 411k | 41.1% |\n| System tools (deferred) | 20.1k | 2.0% |\n| Custom agents | 28 | 0.0% |\n| Memory files | 1.1k | 0.1% |\n| Skills | 9.9k | 1.0% |\n| Messages | 1.3k | 0.1% |\n| Free space | 926.2k | 92.6% |\n| Autocompact buffer | 33k | 3.3% |\n\n### MCP Tools\n\n| Tool | Server | Tokens |\n|------|--------|--------|\n| mcp__claude_ai_Docs__batch | claude_ai_Docs | 145 |\n| mcp__claude_ai_Docs__create | claude_ai_Docs | 226 |\n\n### Custom Agents\n\n| Agent Type | Source | Tokens |\n|------------|--------|--------|\n| probe-helper | Project | 28 |\n\n### Memory Files\n\n| Type | Path | Tokens |\n|------|------|--------|\n| User | /Users/kullanici/.claude/CLAUDE.md | 1.1k |\n\n### Skills\n\n| Skill | Source | Tokens |\n|-------|--------|--------|\n| dataviz | Built-in | ~480 |\n| artifact-design | Built-in | ~70 |\n| artifact-diagramming | Built-in | ~70 |\n| artifact-capabilities | Built-in | ~220 |\n\n",
+ "local_command": "context",
+ "type": "result",
+ "duration_ms": 1021,
+ "uuid": "a9e40b28-6a76-4874-8682-af44b7968985",
+ "queued_turn_count": 0,
+ "result_index": 0
+}

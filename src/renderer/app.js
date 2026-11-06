@@ -940,17 +940,6 @@ function renderInfo(){
   if(!S.info) return;
   const s = sess(S.panes[S.active]);
   if(!s){ el.innerHTML = `<div class="info-h">Bölme ${S.active+1}</div><div class="isec" style="color:var(--muted)">Bu bölmede açık sohbet yok.</div>`; return; }
-  const total = 1000;
-  const fixedK = 16.8+10.6+10+5.2+4.9+1.1;
-  const parts = [
-    ['Mesajlar', Math.max(0, s.ctx - fixedK), 'var(--c-msg)'], ['MCP araçları', 16.8, 'var(--c-mcp)', 1], ['Sistem istemi', 10.6, 'var(--c-sys)'],
-    ['Skill\'ler', 10, 'var(--c-skill)', 1], ['Sistem araçları', 5.2, 'var(--c-gray)'], ['MCP talimatları', 4.9, 'var(--c-gray)', 1],
-    ['Hafıza dosyaları', 1.1, 'var(--c-gray)', 1], ['Sıkıştırma payı', 33, 'var(--c-dark)'],
-  ];
-  const used = parts.slice(0,7).reduce((a,p)=>a+p[1],0);
-  const occupied = parts.reduce((a,p)=>a+p[1],0);
-  const free = total - occupied;
-  const pct = v => (v/total*100).toFixed(1)+'%';
   const f = fold(s.folder);
   const name = s.project.split(/[\\/]/).pop();
   const ST = {connected:'bağlı', failed:'hata', 'needs-auth':'kimlik doğrula', pending:'bağlanıyor', disabled:'kapalı'};
@@ -968,23 +957,7 @@ function renderInfo(){
         <span style="color:var(--faint)">Uzaktan Kontrol açıkken bu sohbete panelden yazarsan çatallayarak devam etmen önerilir.</span>
         <button data-copyrc="${s.id}">Terminal'i yeniden aç</button></div></div>`:''}
     </div>
-    <div class="isec"><h4>Bağlam <span class="sum">dağılım tahmini</span></h4>
-      <div class="ctx-top"><b>%${Math.round(used/total*100)} kullanıldı</b><span>${fmtK(used)} / 1M</span></div>
-      <div class="bar">${parts.map(p=>`<i style="width:${p[1]/total*100}%;background:${p[2]}"></i>`).join('')}</div>
-      <div class="leg">
-        ${parts.map(p=>`<span class="sw" style="background:${p[2]}"></span><span class="n ${p[3]?'ul':''}">${p[0]}</span><span class="v">${fmtK(p[1])}</span><span class="p">${pct(p[1])}</span>`).join('')}
-        <span class="sw" style="background:var(--c-free)"></span><span class="n">Boş alan</span><span class="v">${fmtK(free)}</span><span class="p">${pct(free)}</span>
-        <span class="gap"></span>
-        <span class="sw" style="background:var(--c-dark)"></span><span class="n dim">Ertelenmiş MCP araçları</span><span class="v dim">513.3k</span><span class="p dim">—</span>
-        <span class="sw" style="background:var(--c-dark)"></span><span class="n dim">Ertelenmiş sistem araçları</span><span class="v dim">16.5k</span><span class="p dim">—</span>
-      </div>
-      <div style="margin-top:10px">
-        <button class="exp">${ic('chev','chev')}MCP sunucuları<span>${conns.length}</span></button>
-        <div class="exp-b">${conns.map(c=>esc(c.name)).join('<br>') || '—'}</div>
-        <button class="exp">${ic('chev','chev')}Hafıza dosyaları<span>1</span></button>
-        <div class="exp-b">~/.claude/CLAUDE.md</div>
-      </div>
-    </div>
+    ${ctxSection(s, conns)}
     <div class="isec"><h4 class="click" id="connToggle">Bağlayıcılar <span class="tg ${S.connOpen?'open':''}">${ic('chev')}</span><span class="sum">${connSummary(s, conns)}</span></h4>
       ${!S.connOpen ? '' : `<div class="conn-list">${connRows(s, conns)}<button class="act" data-mcpcheck style="margin-top:6px;font-size:12px">${S.mcpCheck && S.mcpCheck.loading ? 'Kontrol ediliyor…' : 'Durumu şimdi kontrol et'}</button></div>`}
     </div>
@@ -992,6 +965,56 @@ function renderInfo(){
     <div class="isec"><h4>Çıktılar</h4>
       ${s.outputs.length ? s.outputs.map(o=>`<div class="irow">${ic(/\.html?$/.test(o)?'globe':/\.(md|txt|docx)$/.test(o)?'note':'file')}<span class="lbl" title="${esc(o)}">${esc(o.split(/[\\/]/).pop())}</span><span class="ok mono odir">${esc(/[\\/]/.test(o)?o.split(/[\\/]/).slice(0,-1).join('/'):'')}</span></div>`).join('') : '<div style="color:var(--faint);font-size:12.5px">Bu oturumda henüz dosya oluşturulmadı.</div>'}
     </div>`;
+}
+/* Bağlam: Claude Code'un /context ölçümü (gerçek; oturum başına önbellekte, "Yenile" ile ve tur bitince ölçülür).
+   Ölçüm yoksa son turun kullanımından ve sabit paylardan "tahmin". Değerler token cinsinden. */
+const CTX_COLOR = {'Messages':'var(--c-msg)', 'MCP tools':'var(--c-mcp)', 'System prompt':'var(--c-sys)', 'Skills':'var(--c-skill)'};
+const fmtT = n => n < 1000 ? String(Math.round(n)) : fmtK(n / 1000);
+function ctxSection(s, conns){
+  const r = s.ctxReal, CU = window.ctxUsage;
+  let total, used, parts, deferred = [], sum;
+  if(r){
+    total = r.window || s.ctxWindow || 1e6; used = r.total;
+    parts = r.categories.filter(c => !c.deferred).map(c => [CU.label(c.name), c.tokens, CTX_COLOR[c.name] || 'var(--c-gray)']);
+    if(r.buffer) parts.push([CU.label('Autocompact buffer'), r.buffer, 'var(--c-dark)']);
+    deferred = r.categories.filter(c => c.deferred);
+    const m = Math.round((Date.now() - r.at) / 60000);
+    sum = `gerçek · ${s.ctxStale ? 'son turdan önce' : m < 1 ? 'az önce' : m < 60 ? m + ' dk önce' : Math.round(m / 60) + ' sa önce'}`;
+  } else {
+    total = s.ctxWindow || 1e6; const fixed = 16800+10600+10000+5200+4900+1100;
+    parts = [['Mesajlar', Math.max(0, s.ctx*1000 - fixed), 'var(--c-msg)'], ['MCP araçları', 16800, 'var(--c-mcp)'], ['Sistem istemi', 10600, 'var(--c-sys)'],
+      ["Skill'ler", 10000, 'var(--c-skill)'], ['Sistem araçları', 5200, 'var(--c-gray)'], ['MCP talimatları', 4900, 'var(--c-gray)'], ['Hafıza dosyaları', 1100, 'var(--c-gray)']];
+    used = parts.reduce((a,p)=>a+p[1],0); parts.push(['Sıkıştırma payı', 33000, 'var(--c-dark)']);
+    sum = 'tahmin';
+  }
+  const free = r && r.free != null ? r.free : Math.max(0, total - parts.reduce((a,p)=>a+p[1],0));
+  const pct = v => (v/total*100).toFixed(1)+'%';
+  const can = !!s.uuid && !s.draft;
+  const mem = r ? r.memory.map(m => `${esc(m.path)} · ${fmtT(m.tokens)}`) : ['~/.claude/CLAUDE.md'];
+  return `<div class="isec"><h4>Bağlam <span class="sum" data-ctxsrc="${r ? 'real' : 'est'}" title="${r ? 'Claude Code /context ölçümü' : 'Gerçek ölçüm için Yenile'}">${sum}</span>${can ? `<button class="act" data-ctxrefresh>${s.ctxLoading ? 'Ölçülüyor…' : 'Yenile'}</button>` : ''}</h4>
+      ${s.ctxErr ? `<div class="ctx-err">Ölçülemedi: ${esc(s.ctxErr)}</div>` : ''}
+      <div class="ctx-top"><b>%${Math.round(used/total*100)} kullanıldı</b><span>${fmtT(used)} / ${fmtT(total)}</span></div>
+      <div class="bar">${parts.map(p=>`<i style="width:${p[1]/total*100}%;background:${p[2]}"></i>`).join('')}</div>
+      <div class="leg">
+        ${parts.map(p=>`<span class="sw" style="background:${p[2]}"></span><span class="n">${esc(p[0])}</span><span class="v">${fmtT(p[1])}</span><span class="p">${pct(p[1])}</span>`).join('')}
+        <span class="sw" style="background:var(--c-free)"></span><span class="n">Boş alan</span><span class="v">${fmtT(free)}</span><span class="p">${pct(free)}</span>
+        ${deferred.length ? '<span class="gap"></span>' + deferred.map(c=>`<span class="sw" style="background:var(--c-dark)"></span><span class="n dim" title="Gerektiğinde yüklenir, bağlamda yer kaplamaz">${esc(CU.label(c.name))}</span><span class="v dim">${fmtT(c.tokens)}</span><span class="p dim">—</span>`).join('') : ''}
+      </div>
+      <div style="margin-top:10px">
+        <button class="exp">${ic('chev','chev')}MCP sunucuları<span>${conns.length}</span></button>
+        <div class="exp-b">${conns.map(c=>esc(c.name)).join('<br>') || '—'}</div>
+        <button class="exp">${ic('chev','chev')}Hafıza dosyaları<span>${mem.length}</span></button>
+        <div class="exp-b">${mem.join('<br>') || '—'}</div>
+      </div>
+    </div>`;
+}
+async function refreshCtx(s, quiet){
+  if(!s || !s.uuid || s.draft || s.ctxLoading) return;
+  const show = () => { if(S.info && S.panes[S.active] === s.id) renderInfo(); };
+  s.ctxLoading = true; s.ctxErr = null; show();
+  try { s.ctxReal = await API.claude.context({sessionId:s.uuid, cwd:s.cwd || s.project, model:s.modelPick || null}); s.ctxStale = false; }
+  catch(e){ if(!quiet) s.ctxErr = String(e.message || e).replace(/^Error invoking remote method '[^']+': (Error: )?/, '').slice(0, 200); }
+  s.ctxLoading = false; show();
 }
 /* Son medya: sohbetin klasöründeki en yeni görsel ve videolar (2 alt klasöre kadar). 20 sn önbellek; tur bitince yenilenir. */
 const MEDIA_DIRS = new Map(); // klasör → {at, list, loading}
@@ -1330,6 +1353,7 @@ document.addEventListener('click', e => {
     renderPanes(); return; }
   const at = t.closest('[data-attach]'); if(at){ pickAttachments(+at.dataset.attach); return; }
   const ua = t.closest('[data-unattach]'); if(ua){ const s = sess(ua.dataset.sid); s.attach.splice(+ua.dataset.unattach, 1); renderPanes(); return; }
+  if(t.closest('[data-ctxrefresh]')){ refreshCtx(sess(S.panes[S.active])); return; }
   if(t.closest('[data-mcpcheck]')){ const s = sess(S.panes[S.active]); if(s) checkConnectors(s); return; }
   if(t.closest('[data-login]')){ API.claude.login(); toast('Terminal açıldı: girişi tarayıcıda tamamla, sonra "Tekrar kontrol et"'); let n = 0; const iv = setInterval(async () => { n++; const a = await checkAuth(); if(a.loggedIn || n > 40){ clearInterval(iv); if(a.loggedIn) toast('Giriş tamam — artık panelden yazabilirsin'); } }, 3000); return; }
   if(t.closest('[data-authcheck]')){ checkAuth().then(a => toast(a.loggedIn ? 'Giriş tamam' : 'Hâlâ giriş yapılmamış')); return; }
@@ -2029,7 +2053,7 @@ function onRun(p){
       for(const c of ev.message.content) if(c.type === 'tool_result'){ const t = R.tools.get(c.tool_use_id); if(t){ t.o = resText(c.content).slice(0,1500); t.running = false; if(c.is_error) t.err = true; const im = liveImgs(c.content); if(im.length) t.imgs = im; } }
       scheduleLive(s); return;
     }
-    if(ev.type === 'result'){ R.result = ev; return; }
+    if(ev.type === 'result'){ R.result = ev; const w = window.ctxUsage.windowOf(ev.modelUsage); if(w) s.ctxWindow = w; return; }
     return;
   }
   if(p.type === 'permission' || p.type === 'permission-cancel') return onPermission(p);
@@ -2056,6 +2080,7 @@ function finishRun(s, p){
   if(more && failed){ s.queuePaused = true; toast('Tur yarıda kaldı: sıradaki mesajlar duraklatıldı'); }
   else if(more){ setTimeout(() => runQueue(s), 900); }
   MEDIA_DIRS.delete(s.cwd || s.project);
+  if(!failed){ s.ctxStale = !!s.ctxReal; if(S.info && S.panes[S.active] === s.id) refreshCtx(s, true); } // gerçek bağlam: yalnızca görünürken ölçülür
   if(!p.stopped && !(more && !failed) && !seenNow(s)){ s.unseen = true; notify(s, res && res.is_error || p.error ? 'Claude Panel · hata' : 'Claude Panel · tamamlandı', `${s.title}${res && res.is_error ? ' — hata verdi' : ''}`); }
   render();
   // Claude'un yazdığı .jsonl'den kanonik görünümü yeniden yükle (kısa gecikme: dosya yazımı bitsin)

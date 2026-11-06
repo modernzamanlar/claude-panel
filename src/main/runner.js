@@ -13,6 +13,7 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const crypto = require('crypto');
+const ctxUsage = require('../renderer/ctxusage');
 
 const HOME = os.homedir();
 // Yalnızca "~" ve "~/…" (Windows'ta "~\\…") genişletilir; "~kullanici" ya da "~yedek" gibi adlar olduğu gibi kalır
@@ -405,6 +406,27 @@ async function mcpList(cwd) {
   });
 }
 
+// Gerçek bağlam kullanımı: Claude Code'un /context komutu başsız modda yerel olarak çalışır (model çağrılmaz, num_turns 0).
+// --no-session-persistence ile oturumun .jsonl dosyasına hiçbir şey eklenmez (bu bayrak olmadan /context kayda yazılır).
+// Dönüş: {model, total, window, free, buffer, categories:[{name, tokens, deferred}], memory, at}
+async function contextUsage(sessionId, cwd, opts = {}) {
+  const id = checkUuid(sessionId);
+  const dir = checkDir(cwd);
+  if (opts.model && !MODEL_RX.test(String(opts.model))) throw new Error('Geçersiz model: ' + opts.model);
+  const bin = await claudeBin();
+  if (!bin) throw new Error('claude komutu bulunamadı');
+  const env = await loginEnv();
+  const args = ['-p', '/context', '--resume', id, '--no-session-persistence', '--output-format', 'json', ...(opts.model ? ['--model', opts.model] : [])];
+  return new Promise((resolve, reject) => {
+    const p = execClaude(bin, args, { env, cwd: dir, timeout: 60000, maxBuffer: 16 * 1024 * 1024 }, (err, out, errOut) => {
+      const r = ctxUsage.parse(String(out || ''));
+      if (r) resolve({ ...r, at: Date.now() });
+      else reject(new Error(String(errOut || (err && err.message) || '').trim().slice(-300) || 'Bağlam bilgisi okunamadı'));
+    });
+    try { p.stdin.end(); } catch {} // -p istemi argümanda; açık kalan stdin CLI'yi bekletmesin
+  });
+}
+
 // Testler için: bağımlılıklar ve önbellek sıfırlama
 const _test = { deps, winQuote, safeLabel, expand, reset(lp = null) { loginPathCache = lp; launchCache.clear(); } };
-module.exports = { Runner, authStatus, openLoginTerminal, openRemoteTerminal, mcpList, claudeBin, loginEnv, launchSpec, controlStatus, installDesktop, desktopMcp, _test };
+module.exports = { Runner, authStatus, openLoginTerminal, openRemoteTerminal, mcpList, contextUsage, claudeBin, loginEnv, launchSpec, controlStatus, installDesktop, desktopMcp, _test };
