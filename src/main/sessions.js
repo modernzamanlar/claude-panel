@@ -7,6 +7,7 @@ const path = require('path');
 const os = require('os');
 const crypto = require('crypto');
 const readline = require('readline');
+const diffView = require('../renderer/diff'); // düzenleme araçlarının fark verisi (arayüzle aynı kod)
 
 const HOME = os.homedir();
 const PROJECTS_DIR = path.join(HOME, '.claude', 'projects');
@@ -277,6 +278,7 @@ function feedLine(st, line) {
       else if (c.type === 'tool_use') {
         const tool = { t: 'tool', n: c.name, a: toolSummary(c.name, c.input), o: '', id: c.id };
         const card = turnCard(c.name, c.input); if (card) Object.assign(tool, card);
+        const d = diffView.data(c.name, c.input); if (d) tool.d = d;
         last.b.push(tool); st.toolById.set(c.id, tool);
         const fp = c.input && (c.input.file_path || c.input.notebook_path);
         if (fp && /^(Write|Edit|MultiEdit|NotebookEdit)$/.test(c.name)) st.outputs.set(fp, { path: tilde(fp), tool: c.name, ts: e.timestamp });
