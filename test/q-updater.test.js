@@ -480,11 +480,16 @@ test('dirInfo: varsayılanın aynısını seçmek de "varsayılan" sayılır', (
   u.setDir(DEFAULT_SOURCES[0]);
   assert.deepStrictEqual(u.dirInfo(), { dir: DEFAULT_SOURCES[0], defaultDir: DEFAULT_SOURCES[0], isDefault: true });
 });
-test('dirInfo: Mac\'te varsayılan yok (arayüz satırı gizler); seçilmiş klasör yine bildirilir', () => {
+test('dirInfo: Mac\'te varsayılan NAS klasörü (DEFAULT_SOURCES_MAC) görünür; seçilmiş klasör yine bildirilir', () => {
+  const { DEFAULT_SOURCES_MAC } = require('../src/main/updater');
   const { u } = make({ platform: 'darwin' });
-  assert.deepStrictEqual(u.dirInfo(), { dir: null, defaultDir: null, isDefault: true });
+  assert.deepStrictEqual(u.dirInfo(), { dir: DEFAULT_SOURCES_MAC[0], defaultDir: DEFAULT_SOURCES_MAC[0], isDefault: true });
   u.setDir('/Volumes/NAS/Exe');
-  assert.deepStrictEqual(u.dirInfo(), { dir: '/Volumes/NAS/Exe', defaultDir: null, isDefault: false });
+  assert.deepStrictEqual(u.dirInfo(), { dir: '/Volumes/NAS/Exe', defaultDir: DEFAULT_SOURCES_MAC[0], isDefault: false });
+});
+test('dirInfo: varsayılanı olmayan platformda (linux) satır gizlenir', () => {
+  const { u } = make({ platform: 'linux' });
+  assert.deepStrictEqual(u.dirInfo(), { dir: null, defaultDir: null, isDefault: true });
 });
 test('dirInfo: bozuk ayar dosyasında varsayılana düşer', () => {
   const { u, settingsFile } = make({ platform: 'win32' });
