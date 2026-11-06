@@ -6,6 +6,7 @@ const fs = require('fs');
 const path = require('path');
 const os = require('os');
 const { sha512, signManifest, verifyManifest } = require('../src/main/updater');
+const { keepMacEntry } = require('../src/main/macupdate');
 const KEY = process.env.CLAUDE_PANEL_SIGN_KEY || path.join(os.homedir(), '.claude-panel-yayin', 'guncelleme-imza.pem');
 
 const arg = n => { const i = process.argv.indexOf(n); return i > 0 ? process.argv[i + 1] : null; };
@@ -30,7 +31,9 @@ const src = path.join(ROOT, 'dist', name);
   manifest.imza = signManifest(manifest, fs.readFileSync(KEY, 'utf8'));
   if (!verifyManifest(manifest)) throw new Error('İmza, uygulamadaki açık anahtarla doğrulanamadı (anahtar değişmiş mi?)');
   const mf = path.join(DEST, 'guncelleme.json');
-  fs.writeFileSync(mf + '.tmp', JSON.stringify(manifest, null, 2));
+  // Mac girdisini (scripts/release-mac.js) koru; Windows alanları yukarıdaki gibi baştan yazılır
+  let prev = null; try { prev = JSON.parse(fs.readFileSync(mf, 'utf8')); } catch {}
+  fs.writeFileSync(mf + '.tmp', JSON.stringify(keepMacEntry(prev, manifest), null, 2));
   fs.renameSync(mf + '.tmp', mf);
   // eski kurulum dosyalarını temizle (bu ve bir önceki sürüm kalır)
   const olds = fs.readdirSync(DEST).filter(f => /^Claude Panel Setup .+\.exe$/.test(f) && f !== name)

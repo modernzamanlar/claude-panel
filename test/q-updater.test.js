@@ -45,7 +45,9 @@ function make(opts = {}) {
   const spawn = fakeSpawn();
   const app = { getVersion: () => '0.2.0', quit: () => quits.push(Date.now()) };
   const settingsFile = path.join(root, 'ayar', 'settings.json');
-  const u = createUpdater({ app, settingsFile, enabled: true, publicKey: PUB, downloadDir: dl, spawn,
+  // platform: varsayılan 'linux' (Windows akışı, varsayılan kaynak yok) — testler Mac'te de, Windows'ta da aynı koşsun;
+  // Mac akışı (platform 'darwin') aşağıdaki "Mac" bölümünde
+  const u = createUpdater({ app, settingsFile, enabled: true, publicKey: PUB, downloadDir: dl, spawn, platform: 'linux',
     onState: s => { states.push(s.phase); snaps.push(s); }, ...opts });
   return { u, root, dir, dl, states, snaps, quits, spawn, settingsFile };
 }
@@ -151,7 +153,7 @@ test('etkinlik: Windows dışında ortam değişkeni yoksa kapalı; win32de veya
   assert.strictEqual((await win.u.check()).phase, 'none');
   process.env.CLAUDE_PANEL_UPDATES = '/olmayan-ortam-klasoru';
   try {
-    const env = make({ enabled: undefined, platform: 'darwin' });
+    const env = make({ enabled: undefined, platform: 'darwin', defaultSources: [] }); // Mac varsayılanları: q-updater-mac.test.js
     const st = await env.u.check({ manual: true });
     assert.strictEqual(st.phase, 'error');
     assert.deepStrictEqual(st.tried, ['/olmayan-ortam-klasoru (ENOENT)']);
