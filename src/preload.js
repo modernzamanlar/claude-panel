@@ -48,6 +48,10 @@ contextBridge.exposeInMainWorld('api', {
     control: () => ipcRenderer.invoke('claude:control'),
     installDesktop: () => ipcRenderer.invoke('claude:installDesktop'),
   },
+  rewind: {
+    files: opts => ipcRenderer.invoke('rewind:files', opts),
+    worktreeInfo: (dir, name) => ipcRenderer.invoke('git:worktreeInfo', dir, name),
+  },
   run: {
     start: opts => ipcRenderer.invoke('run:start', opts),
     stop: runId => ipcRenderer.invoke('run:stop', runId),

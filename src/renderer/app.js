@@ -794,47 +794,7 @@ function planCard(items){
   const done = items.filter(i => i.s === 'completed').length;
   return `<div class="plan-card"><div class="pc-h">${ic('note')}<b>Görevler</b><span>${done}/${items.length}</span></div>${items.map(i => `<div class="pc-i ${i.s}"><span class="pc-b">${i.s === 'completed' ? '✓' : i.s === 'in_progress' ? '<span class="spin"></span>' : ''}</span><span>${esc(i.c)}</span></div>`).join('')}</div>`;
 }
-/* ---------- Mesajı düzenle ve oradan devam et ----------
-   Diskten okunan kullanıcı mesajında `at` = önündeki son asistan mesajının uuid'si ('' = sohbetin başı; sessions.js).
-   Düzenlenen metin --resume-session-at <at> --fork-session ile YENİ bir oturuma gider; asıl sohbet olduğu gibi kalır.
-   Görseller/ekler yeniden gönderilmez, yalnızca metin. */
-const UE_AT = /^([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})?$/i;
-const ueCan = m => typeof m.at === 'string' && UE_AT.test(m.at);
-const ueIs = (s, m) => !!s.uedit && s.uedit.at === m.at && s.uedit.ts === m.ts;
-function userHTML(s, m, mi){
-  const tail = `${thumbs(m.imgs, 'th-u')}${mediaHTML(s, m, mi, 'u')}`;
-  if(ueIs(s, m)) return `<div class="u ue-box"><textarea class="ue-ta" data-uedta="${s.id}" rows="3">${esc(m.t)}</textarea>
-    <div class="ue-acts"><span class="ue-hint">Enter gönderir · Shift+Enter yeni satır · Esc vazgeçer<br>Yeni bir sohbet açılır; asıl sohbet olduğu gibi kalır.</span>
-    <button class="btn" data-uex="${s.id}">Vazgeç</button><button class="btn pri" data-uesend="${s.id}">${ic('up')}Gönder</button></div></div>${tail}`;
-  if(!ueCan(m) || s.draft) return `<div class="u">${esc(m.t)}</div>${tail}`;
-  const tip = s.run ? 'Sohbet çalışırken düzenlenemez' : 'Düzenle: bu mesajı değiştirip buradan devam et. Yeni bir sohbet açılır; asıl sohbet olduğu gibi kalır.';
-  return `<div class="u-line"><button class="ibtn ue-btn" data-uedit="${mi}" data-sid="${s.id}" title="${tip}"${s.run ? ' disabled' : ''}>${ic('edit')}</button><div class="u">${esc(m.t)}</div></div>${tail}`;
-}
-function ueOpen(s, mi){
-  const m = s && s.msgs[mi]; if(!m || s.run || !ueCan(m)) return;
-  s.uedit = {at: m.at, ts: m.ts}; renderPanes();
-  const ta = document.querySelector(`[data-uedta="${CSS.escape(s.id)}"]`);
-  if(ta){ ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length); ta.style.height = ta.scrollHeight + 'px'; }
-}
-function ueCancel(s){ if(s && s.uedit){ s.uedit = null; renderPanes(); } }
-async function ueSend(s){
-  const ta = document.querySelector(`[data-uedta="${CSS.escape(s.id)}"]`);
-  const mi = s.uedit ? s.msgs.findIndex(m => m.r === 'u' && ueIs(s, m)) : -1;
-  const text = ta ? ta.value.trim() : ''; if(mi < 0 || !text) return;
-  if(s.run){ toast('Sohbet çalışırken düzenlenemez · tur bitince gönder'); return; }
-  if(!S.auth || !S.auth.loggedIn){ await checkAuth(); if(!S.auth.loggedIn){ toast('Önce Claude Code girişi yapılmalı'); return; } }
-  const at = s.msgs[mi].at; s.uedit = null;
-  if(at){ // gönderilemezse düzenleyici yazılan metinle geri açılır
-    if(!(await sendNow(s, text, [], {fork:true, resumeAt:at, cut:mi}))){ ueOpen(s, mi); const t2 = document.querySelector(`[data-uedta="${CSS.escape(s.id)}"]`); if(t2) t2.value = text; }
-    return;
-  }
-  // Sohbetin ilk mesajı: önünde geçmiş yok → aynı klasörde yeni sohbet
-  const uuid = crypto.randomUUID(), id = sid(uuid);
-  const n = {...s, id, uuid, draft:true, title:s.title + ' (düzenlendi)', rawTitle:s.rawTitle || s.title, msgs:[], outputs:[], skipped:0, turns:0, run:null, queue:[], askFork:false,
-    status:'idle', pinned:false, trashed:false, hidden:false, remote:false, fresh:false, unseen:false, loaded:true, lastTs:new Date().toISOString(), ago:'şimdi', ctx:0, localUntil:Date.now() + 10*60*1000};
-  S.sessions.unshift(n); S.items.unshift(id); S.panes = S.panes.map(p => p === s.id ? id : p);
-  if(await sendNow(n, text, [])) toast('Düzenlenen mesajla yeni sohbet başladı · asıl sohbet duruyor');
-}
+/* Mesajı düzenle / buraya geri sar: userHTML ve akışın geri kalanı geri-sarma.js'te */
 function msgHTML(s, m, mi){
   if(m.r==='u') return userHTML(s, m, mi);
   const out = []; let grp = [], gi = 0;
@@ -886,10 +846,10 @@ function paneParts(i){
   return {key:s.id, cls:`pane ${i===S.active?'active':''} ${compact}`,
     head:`${num}
       <div class="ph-main"><div class="ph-title">${esc(s.title)}</div>
-        <div class="ph-sub">${f?`<span class="chip"><span class="dot" style="background:${f.color}"></span>${esc(f.name)}</span><span class="sep">·</span>`:''}<span class="mono">${esc(s.project)}</span></div></div>
+        <div class="ph-sub">${f?`<span class="chip"><span class="dot" style="background:${f.color}"></span>${esc(f.name)}</span><span class="sep">·</span>`:''}<span class="mono">${esc(s.project)}</span>${forkChip(s)}</div></div>
       ${s.remote?`<span class="rc-badge" title="Uzaktan Kontrol açık">${ic('cursor')}<span>Uzaktan</span></span>`:''}${st}<button class="ibtn" data-swap="${i}" title="Bu bölmede başka bir sohbet aç (ara)">${ic('search')}</button><button class="ibtn" data-more="${s.id}">${ic('more')}</button><button class="ibtn" data-close="${i}" title="Bölmeyi kapat">${ic('x')}</button>`,
     banner: s.status==='elsewhere' && !s.run ? `<div class="banner info"><span class="sd"></span>Claude uygulamasında da açık · canlı izleniyor</div>` : '',
-    top: forkCard(s, i) + permCard(s) + queueCard(s) + authBanner(), att: attachChips(s),
+    top: rwCard(s, i) + forkCard(s, i) + permCard(s) + queueCard(s) + authBanner(), att: attachChips(s),
     ph: s.draft ? 'İlk mesajını yaz — sohbet '+s.project.split(/[\\/]/).pop()+' klasöründe başlayacak' : s.run ? 'Sıraya almak için yaz ve Enter — tur bitince gönderilir' : 'Yanıtla…  ( / şablon · Tab tamamlar )',
     dis: !!(S.auth && !S.auth.loggedIn),
     row:`<button class="ibtn" data-attach="${i}" title="Dosya veya görsel ekle (sürükle-bırak ve yapıştır da olur)">${ic('clip')}</button>
@@ -1002,6 +962,7 @@ function renderInfo(){
       <div class="irow">${ic('laptop')}<span class="lbl">Bu bilgisayar</span><button class="act" data-reveal="${esc(s.project)}">Klasörü aç</button></div>
       <div class="irow">${ic('folder')}<span class="lbl">${esc(name)} <span class="sub">· ${esc(s.project.slice(0, Math.max(0, s.project.length - name.length - 1)))}</span></span></div>
       ${f?`<div class="irow"><span style="width:16px;display:grid;place-items:center"><span class="dot" style="background:${f.color}"></span></span><span class="lbl">${esc(f.name)} <span class="sub">· panel klasörü</span></span></div>`:''}
+      ${dirsInfo(s)}
       <div class="irow">${ic('cursor')}<span class="lbl">Uzaktan Kontrol</span><button class="switch ${s.remote?'on':''}" id="swRemote" data-sid="${s.id}"></button></div>
       ${s.remote?`<div class="remote-box"><div class="rt">
         <span class="st ${s.status==='elsewhere'?'ok':''}"><i></i>${s.status==='elsewhere' ? 'Terminal oturumu çalışıyor' : 'Terminal oturumu başlatıldı'}</span>
@@ -1146,6 +1107,7 @@ function renderNC(){
       </div>
       ${gf && gf.dir && gf.dir!==NC.dir?`<div style="font-size:12px;color:var(--muted)">“${esc(gf.name)}” klasörünün proje klasörü: <span class="mono">${esc(gf.dir)}</span> <button class="act" style="text-decoration:underline" data-nc="dir" data-d="${esc(gf.dir)}">Bunu kullan</button></div>`:''}
       ${linked.length && !linked.some(f=>f.id===NC.group)?`<div style="font-size:12px;color:var(--muted)">Bu dizin “${esc(linked[0].name)}” klasörüne bağlı. <button class="act" style="text-decoration:underline" data-nc="uselinked" data-f="${linked[0].id}">O klasöre koy</button></div>`:''}
+      ${ncExtraHTML()}
       <label class="fl">İlk mesaj <span>· isteğe bağlı</span></label>
       <textarea class="inp" id="ncText" rows="3" style="resize:vertical" placeholder="Ne üzerinde çalışalım?">${esc(NC.text)}</textarea>
     </div>
@@ -1163,6 +1125,7 @@ function startChat(){
     folder:NC.group, pinned:false, trashed:false, hidden:false, lastTs:new Date().toISOString(), ago:'şimdi', model:NC.model || 'Opus', newModel:modelAlias || null,
     ctx:0, msgs:[], outputs:[], loaded:true, status:'idle', fresh:false, remote:false, localUntil:Date.now() + 10*60*1000};
   s.rawTitle = auto; // ad verildiyse title ≠ rawTitle → takma ad olarak saklanır, Claude'un başlığı onu ezmez
+  if(!ncApply(s)) return; // ek klasörler + worktree (geri-sarma.js); geçersizse diyalog açık kalır
   S.sessions.unshift(s); S.items.unshift(id);
   const pane = NC.pane; NC = null; renderNC();
   setSearch(false); setOrg(false); openIn(id, pane);
@@ -1227,6 +1190,7 @@ function folderMenu(fid, x, y){
 /* ---------- Events ---------- */
 document.addEventListener('click', e => {
   const t = e.target;
+  if(rwClick(t)) return; // geri-sarma.js: düzenle / geri sar / ek klasör / worktree
   const m = t.closest('.menu [data-m]');
   if(m && /^(updcheck|upddir|updgo|mirroropen|helpdlg|fontdlg)$/.test(m.dataset.m)){ const k = m.dataset.m; closeMenu();
     if(k==='fontdlg') openFonts();
@@ -1397,9 +1361,6 @@ document.addEventListener('click', e => {
   const swp = t.closest('[data-swap]'); if(swp){ S.active = +swp.dataset.swap; SR.q = ''; const sq = $('#sq'); if(sq) sq.value = ''; renderRail(); setSearch(true); return; }
   const mo = t.closest('[data-more]'); if(mo){ const r = mo.getBoundingClientRect(); sessMenu(mo.dataset.more, r.left-160, r.bottom+4); return; }
   if(t.closest('[data-watch]')){ toast('Salt okuma modunda canlı izleniyor'); return; }
-  const ue = t.closest('[data-uedit]'); if(ue){ if(!ue.disabled) ueOpen(sess(ue.dataset.sid), +ue.dataset.uedit); return; }
-  const ues = t.closest('[data-uesend]'); if(ues){ const s = sess(ues.dataset.uesend); if(s) ueSend(s); return; }
-  const uex = t.closest('[data-uex]'); if(uex){ ueCancel(sess(uex.dataset.uex)); return; }
   const fk = t.closest('[data-fork]'); if(fk){
     const s = sess(fk.dataset.fork); const id='s'+Date.now();
     S.sessions.push({...s, id, title:s.title+' (çatal)', status:'idle', ago:'şimdi', msgs:[...s.msgs], pinned:false, remote:false}); S.items.splice(S.items.indexOf(s.id)+1,0,id);
@@ -1441,12 +1402,6 @@ document.addEventListener('keydown', e => {
   if(e.target.matches('[data-ren]')){
     if(e.key==='Enter'){ commitRename(e.target); render(); }
     if(e.key==='Escape'){ renaming=null; renderBoard(); }
-    e.stopPropagation(); return;
-  }
-  if(e.target.matches('[data-uedta]')){ // mesaj düzenleyici: Enter gönderir, Shift+Enter yeni satır, Esc vazgeçer
-    const s = sess(e.target.dataset.uedta);
-    if(e.key==='Enter' && !e.shiftKey && !e.isComposing){ e.preventDefault(); if(s) ueSend(s); }
-    if(e.key==='Escape'){ e.preventDefault(); ueCancel(s); }
     e.stopPropagation(); return;
   }
   if(e.target.matches('[data-ta]') && e.key==='Tab' && !e.shiftKey && e.target._sug){ e.preventDefault(); acceptGhost(e.target); return; }
@@ -1502,7 +1457,6 @@ document.addEventListener('change', e => {
 });
 document.addEventListener('input', e => {
   if(e.target.id==='ncDq'){ ncSync(); NC.dq = e.target.value; renderNC(); const i=$('#ncDq'); i.focus(); i.setSelectionRange(999,999); }
-  if(e.target.matches && e.target.matches('[data-uedta]')){ e.target.style.height = 'auto'; e.target.style.height = e.target.scrollHeight + 'px'; }
   if(e.target.matches && e.target.matches('[data-qfree]')){ const s = sess(S.panes[+e.target.closest('.pane').dataset.pane]); if(s && s.run){ (s.run.free = s.run.free || {})[+e.target.dataset.qfree] = e.target.value; } }
   if(e.target.id==='sq'){ SR.q = e.target.value; SR.sel = 0; renderSearch(); backendSearch(); }
   if(e.target.id==='nfCq'){ NF.cq = e.target.value; filterNFPicks(); }
@@ -1722,6 +1676,7 @@ function fromSummary(x, prev){
     title: meta.alias || x.title, rawTitle:x.title, project:x.project, cwd:x.cwd,
     folder: meta.folder && fold(meta.folder) ? meta.folder : null, pinned:!!meta.pinned, trashed:!!meta.trashed, hidden:!!meta.hidden,
     ...('effort' in meta ? {effort: meta.effort} : {}), ...('control' in meta ? {control: !!meta.control} : {}),
+    ...(Array.isArray(meta.dirs) ? {dirs: meta.dirs.filter(d => typeof d === 'string')} : {}), ...(meta.forkOf ? {forkOf: meta.forkOf} : {}),
     lastTs:x.lastTs, ago:fmtAgo(x.lastTs), model:x.model || '—', ctx:x.ctxTokens/1000, bridge:x.bridge, permissionMode:x.permissionMode, status: x.live ? 'elsewhere' : 'idle'};
 }
 
@@ -1753,7 +1708,8 @@ function buildWS(){
     Object.entries(WS.meta || {}).forEach(([k, v]) => { if(!sess(k)) meta[k] = v; });
     S.sessions.forEach(s => { const m = {};
       if(s.folder) m.folder = s.folder; if(s.pinned) m.pinned = true; if(s.title !== s.rawTitle) m.alias = s.title;
-      if(s.trashed) m.trashed = true; if(s.hidden) m.hidden = true; if(s.effort !== undefined) m.effort = s.effort; if(s.control !== undefined) m.control = s.control; if(Object.keys(m).length) meta[s.id] = m; });
+      if(s.trashed) m.trashed = true; if(s.hidden) m.hidden = true; if(s.effort !== undefined) m.effort = s.effort; if(s.control !== undefined) m.control = s.control;
+      if(s.dirs && s.dirs.length) m.dirs = s.dirs; if(s.forkOf) m.forkOf = s.forkOf; if(Object.keys(m).length) meta[s.id] = m; });
     const graphPos = {}; Object.entries(G.pos).forEach(([k,p]) => { if(p.fixed) graphPos[k] = {x:Math.round(p.x), y:Math.round(p.y)}; });
     WS = {...WS, firstRun:false, meta, graphPos, prefs:{...(WS.prefs||{}), fonts:{...FONT}, fontsV:2},
       folders: S.folders.map(({id,name,color,parent,open,dir,trashed,hidden}) => ({id,name,color,parent,open,dir,trashed,hidden})),
@@ -1903,6 +1859,7 @@ async function send(i, opt = {}){
   if(!s || !ta) return;
   const text = ta.value.trim(); const att = s.attach || []; if(!text && !att.length) return;
   if(!S.auth || !S.auth.loggedIn){ await checkAuth(); if(!S.auth.loggedIn){ toast('Önce Claude Code girişi yapılmalı'); return; } }
+  if(s.rw && !s.run) return rwSend(s, i, ta); // düzenlenen mesaj: o noktadan yeni kopyada devam (geri-sarma.js)
   if(s.run){ // çalışırken yazılan mesaj sıraya girer; tur bitince sırayla gönderilir
     (s.queue = s.queue || []).push({text, att}); s.queuePaused = false;
     ta.value = ''; autosize(ta); s.inputDraft = ''; s.attach = []; updateGhost(ta);
@@ -1950,7 +1907,7 @@ async function sendNow(s, text, att, opt = {}){
   RUNS.set(runId, s.id);
   render(); { const pi = S.panes.indexOf(s.id); if(pi >= 0) scrollPaneBottom(pi); }
   try {
-    await API.run.start({runId, sessionId:s.uuid, newSession:isNew, fork:!!opt.fork, resumeAt:opt.resumeAt || null, cwd:s.cwd || s.project, text, images, files, model:s.modelPick || (isNew ? s.newModel : null), permissionMode:pmodeOf(s), effort:effortOf(s), control:controlOf(s)});
+    await API.run.start({runId, sessionId:s.uuid, newSession:isNew, fork:!!opt.fork, resumeAt:opt.resumeAt || null, addDirs:s.dirs || [], worktree:isNew ? s.worktree || null : null, cwd:s.cwd || s.project, text, images, files, model:s.modelPick || (isNew ? s.newModel : null), permissionMode:pmodeOf(s), effort:effortOf(s), control:controlOf(s)});
     s.draft = false; return true;
   } catch(e){
     RUNS.delete(runId); s.run = null; s.status = 'idle'; live.streaming = false;
@@ -1981,7 +1938,7 @@ function forkTo(s, newUuid){
   s.msgs.splice(-2, 2); s.run = null; s.status = R.prevStatus || 'idle';
   // Düzenlenen mesajda (R.cut) yeni oturum yalnızca o mesajdan önceki geçmişi taşır
   const ed = R.cut != null, base = ed ? s.msgs.slice(0, R.cut) : s.msgs;
-  const n = {...s, localUntil:Date.now() + 10*60*1000, id:nid, uuid:newUuid, title:s.title + (ed ? ' (düzenlendi)' : ' (çatal)'), rawTitle:s.rawTitle || s.title, msgs:[...base, userMsg, R.live], run:R, status:'running', pinned:false, trashed:false, fresh:false, loaded:true, uedit:null};
+  const n = {...s, localUntil:Date.now() + 10*60*1000, id:nid, uuid:newUuid, title:ed ? rewind.forkTitle(s.title) : s.title + ' (çatal)', rawTitle:s.rawTitle || s.title, msgs:[...base, userMsg, R.live], run:R, status:'running', pinned:false, trashed:false, fresh:false, loaded:true, rw:null, forkOf:ed ? s.id : null};
   S.sessions.unshift(n); S.items.unshift(nid);
   S.panes = S.panes.map(p => p === s.id ? nid : p);
   RUNS.set(R.runId, nid);
@@ -2057,6 +2014,7 @@ function onRun(p){
     const ev = p.ev;
     if(ev.type === 'system' && ev.subtype === 'init'){
       if(R.fork && ev.session_id && ev.session_id !== s.uuid) s = forkTo(s, ev.session_id);
+      rwInit(s, ev);
       s.connectorsLive = ev.mcp_servers || []; if(ev.model) s.model = prettyModelR(ev.model);
       if(S.panes[S.active] === s.id) renderInfo();
       return;
