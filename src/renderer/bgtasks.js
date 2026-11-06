@@ -45,7 +45,7 @@
     if (p.ctl === 'out') return output(st, { task_id: p.tid }, text) ? find(st, p.tid) : null;
     const id = idFrom(text, tur, p.k); if (!id) return null;
     const t = find(st, id, tu);
-    if (t) return t; // canlı akışta task_started önce gelmiş olabilir
+    if (t) { if (!t.cmd) t.cmd = p.cmd; if (!t.d) t.d = p.d; return t; } // canlı akışta task_started önce gelmiş olabilir
     return add(st, { id, tu, k: p.k, cmd: p.cmd, d: p.d, st: 'run', t0: p.t0, t1: null, out: '', code: null });
   }
 
