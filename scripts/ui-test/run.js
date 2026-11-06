@@ -25,10 +25,23 @@ const FAKE = path.join(ROOT, 'test', process.platform === 'win32' ? 'fake-claude
 const ELECTRON = require(path.join(ROOT, 'node_modules', 'electron')); // Node'dan require edilince ikilinin yolunu verir
 
 const D = fs.mkdtempSync(path.join(os.tmpdir(), 'cp-uitest-'));
-const clean = () => { try { fs.rmSync(D, { recursive: true, force: true }); } catch {} };
-for (const d of ['home', 'mirror', 'out']) fs.mkdirSync(path.join(D, d));
+// UITEST_SHOTS=<klasör> verilirse ekran görüntüleri silinmeden önce oraya kopyalanır
+const clean = () => {
+  if (process.env.UITEST_SHOTS) try { fs.cpSync(path.join(D, 'out'), path.join(process.env.UITEST_SHOTS, M), { recursive: true }); } catch {}
+  try { fs.rmSync(D, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 }); } catch {} // Windows: kapanan süreç dosyayı kısa süre tutabilir
+};
+for (const d of ['home', 'mirror', 'out', 'ud']) fs.mkdirSync(path.join(D, d));
+// Her çalıştırmanın kendi Electron kullanıcı veri klasörü: aynı anda koşan testler (mac + win, başka dallar) kilitlenmesin
+const UD = path.join(D, 'ud');
+const TIMEOUT = +process.env.UITEST_TIMEOUT_MS || 5 * 60 * 1000; // asılı kalan açılış sonsuza dek beklenmez
 let child = null;
-for (const sig of ['SIGINT', 'SIGTERM']) process.on(sig, () => { if (child) try { child.kill(); } catch {} clean(); process.exit(1); });
+// Electron yardımcı süreçleriyle birlikte kapanır (Windows'ta sinyal yok: taskkill /T)
+const kill = p => {
+  if (!p || p.exitCode !== null) return;
+  if (process.platform === 'win32') { try { require('child_process').spawnSync('taskkill', ['/pid', String(p.pid), '/T', '/F'], { windowsHide: true }); } catch {} }
+  else try { p.kill('SIGKILL'); } catch {}
+};
+for (const sig of ['SIGINT', 'SIGTERM']) process.on(sig, () => { kill(child); clean(); process.exit(1); });
 
 // Adımlar: her blok tek satıra indirilir (SELFTEST_STEPS satır başına bir adım)
 const blocks = f => fs.readFileSync(f, 'utf8').split('//--').filter(b => b.trim());
