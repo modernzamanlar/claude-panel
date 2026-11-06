@@ -796,6 +796,7 @@ function planCard(items){
 }
 function msgHTML(s, m, mi){
   if(m.r==='u') return `<div class="u">${esc(m.t)}</div>${thumbs(m.imgs, 'th-u')}${mediaHTML(s, m, mi, 'u')}`;
+  if(m.r==='c') return `<div class="cmp-line ${m.trigger === 'auto' ? 'auto' : ''}" data-cmp="${m.trigger === 'auto' ? 'auto' : 'manual'}"><span>${esc(window.ctxUsage.compactText(m))}</span></div>`;
   const out = []; let grp = [], gi = 0;
   const flush = () => { if(grp.length){ out.push(toolGroupHTML(grp, s.id + '|' + mi + '|' + gi++)); grp = []; } };
   const last = mi === s.msgs.length - 1 && !s.run;
@@ -806,7 +807,7 @@ function msgHTML(s, m, mi){
     else grp.push(b);
   }
   flush();
-  return `<div class="a">${out.join('')}${m.draft?md(m.draft):''}${m.streaming?'<span class="cursor"></span>':''}${imgsHTML(s, m)}${mediaHTML(s, m, mi, 'a')}</div>`;
+  return `<div class="a">${out.join('')}${m.draft?md(m.draft):''}${m.compacting?'<p class="run-note"><span class="spin" style="display:inline-block;vertical-align:-2px;margin-right:6px"></span>Sohbet sıkıştırılıyor…</p>':''}${m.streaming?'<span class="cursor"></span>':''}${imgsHTML(s, m)}${mediaHTML(s, m, mi, 'a')}</div>`;
 }
 const renderMsgs = s => msgParts(s).map(p => `<div class="mw">${p}</div>`).join('');
 // Parçaları kaba yerleştirir: aynı içerikli eski düğümler yeniden kullanılır (taşınır), yalnızca yeni/değişen parça çizilir.
@@ -958,6 +959,7 @@ function renderInfo(){
         <button data-copyrc="${s.id}">Terminal'i yeniden aç</button></div></div>`:''}
     </div>
     ${ctxSection(s, conns)}
+    ${costSection(s)}
     <div class="isec"><h4 class="click" id="connToggle">Bağlayıcılar <span class="tg ${S.connOpen?'open':''}">${ic('chev')}</span><span class="sum">${connSummary(s, conns)}</span></h4>
       ${!S.connOpen ? '' : `<div class="conn-list">${connRows(s, conns)}<button class="act" data-mcpcheck style="margin-top:6px;font-size:12px">${S.mcpCheck && S.mcpCheck.loading ? 'Kontrol ediliyor…' : 'Durumu şimdi kontrol et'}</button></div>`}
     </div>
@@ -966,47 +968,63 @@ function renderInfo(){
       ${s.outputs.length ? s.outputs.map(o=>`<div class="irow">${ic(/\.html?$/.test(o)?'globe':/\.(md|txt|docx)$/.test(o)?'note':'file')}<span class="lbl" title="${esc(o)}">${esc(o.split(/[\\/]/).pop())}</span><span class="ok mono odir">${esc(/[\\/]/.test(o)?o.split(/[\\/]/).slice(0,-1).join('/'):'')}</span></div>`).join('') : '<div style="color:var(--faint);font-size:12.5px">Bu oturumda henüz dosya oluşturulmadı.</div>'}
     </div>`;
 }
-/* Bağlam: Claude Code'un /context ölçümü (gerçek; oturum başına önbellekte, "Yenile" ile ve tur bitince ölçülür).
-   Ölçüm yoksa son turun kullanımından ve sabit paylardan "tahmin". Değerler token cinsinden. */
-const CTX_COLOR = {'Messages':'var(--c-msg)', 'MCP tools':'var(--c-mcp)', 'System prompt':'var(--c-sys)', 'Skills':'var(--c-skill)'};
-const fmtT = n => n < 1000 ? String(Math.round(n)) : fmtK(n / 1000);
+/* Bağlam: kullanılan token son asistan yanıtının usage'ından (input + cache_read + cache_creation + output; her yanıtla gelir,
+   ücretsiz), kategoriler Claude Code'un /context ölçümünden (`claude -p /context --resume <id> --no-session-persistence`:
+   model çağrılmaz, kullanım harcamaz; oturum başına önbellekte, panel açılınca bir kez, tur bitince ve "Ayrıntı" ile ölçülür).
+   Bilinmeyen değer "bilinmiyor" diye yazılır; sabit/tahmini sayı yok. Değerler token cinsinden. */
+const CTX_COLOR = {'Messages':'var(--c-msg)', 'MCP tools':'var(--c-mcp)', 'System prompt':'var(--c-sys)', 'Skills':'var(--c-skill)', 'Autocompact buffer':'var(--c-dark)'};
+const agoTxt = at => { const m = Math.round((Date.now() - at) / 60000); return m < 1 ? 'az önce' : m < 60 ? m + ' dk önce' : Math.round(m / 60) + ' sa önce'; };
 function ctxSection(s, conns){
-  const r = s.ctxReal, CU = window.ctxUsage;
-  let total, used, parts, deferred = [], sum;
-  if(r){
-    total = r.window || s.ctxWindow || 1e6; used = r.total;
-    parts = r.categories.filter(c => !c.deferred).map(c => [CU.label(c.name), c.tokens, CTX_COLOR[c.name] || 'var(--c-gray)']);
-    if(r.buffer) parts.push([CU.label('Autocompact buffer'), r.buffer, 'var(--c-dark)']);
-    deferred = r.categories.filter(c => c.deferred);
-    const m = Math.round((Date.now() - r.at) / 60000);
-    sum = `gerçek · ${s.ctxStale ? 'son turdan önce' : m < 1 ? 'az önce' : m < 60 ? m + ' dk önce' : Math.round(m / 60) + ' sa önce'}`;
-  } else {
-    total = s.ctxWindow || 1e6; const fixed = 16800+10600+10000+5200+4900+1100;
-    parts = [['Mesajlar', Math.max(0, s.ctx*1000 - fixed), 'var(--c-msg)'], ['MCP araçları', 16800, 'var(--c-mcp)'], ['Sistem istemi', 10600, 'var(--c-sys)'],
-      ["Skill'ler", 10000, 'var(--c-skill)'], ['Sistem araçları', 5200, 'var(--c-gray)'], ['MCP talimatları', 4900, 'var(--c-gray)'], ['Hafıza dosyaları', 1100, 'var(--c-gray)']];
-    used = parts.reduce((a,p)=>a+p[1],0); parts.push(['Sıkıştırma payı', 33000, 'var(--c-dark)']);
-    sum = 'tahmin';
-  }
-  const free = r && r.free != null ? r.free : Math.max(0, total - parts.reduce((a,p)=>a+p[1],0));
-  const pct = v => (v/total*100).toFixed(1)+'%';
-  const can = !!s.uuid && !s.draft;
-  const mem = r ? r.memory.map(m => `${esc(m.path)} · ${fmtT(m.tokens)}`) : ['~/.claude/CLAUDE.md'];
-  return `<div class="isec"><h4>Bağlam <span class="sum" data-ctxsrc="${r ? 'real' : 'est'}" title="${r ? 'Claude Code /context ölçümü' : 'Gerçek ölçüm için Yenile'}">${sum}</span>${can ? `<button class="act" data-ctxrefresh>${s.ctxLoading ? 'Ölçülüyor…' : 'Yenile'}</button>` : ''}</h4>
+  const CU = window.ctxUsage, T = CU.fmtTok, can = !!s.uuid && !s.draft;
+  if(can && !s.ctxReal && !s.ctxTried && !s.run && !s.ctxLoading){ s.ctxTried = true; setTimeout(() => refreshCtx(s, true), 0); }
+  const v = CU.view({used: s.ctx > 0 ? s.ctx * 1000 : null, window: s.ctxWindow || window.modelInfo.windowOf(s.modelPick || s.modelId), report: s.ctxReal, stale: s.ctxStale});
+  const W = v.window, pct = x => W ? (x / W * 100).toFixed(1) + '%' : '—';
+  const sum = s.ctxLoading ? 'ölçülüyor…' : v.src === 'report' ? '/context · ' + agoTxt(s.ctxReal.at) : v.src === 'usage' ? 'son yanıta göre' : 'bilinmiyor';
+  const tip = v.src === 'report' ? 'Claude Code /context ölçümü' : v.src === 'usage' ? 'Son asistan yanıtının token kullanımı (girdi + önbellek + çıktı)' : 'Bu sohbette henüz kullanım bilgisi yok';
+  const sw = (c, n, val, cls = '', t = '') => `<span class="sw" style="background:${c}"></span><span class="n ${cls}"${t ? ` title="${esc(t)}"` : ''}>${esc(n)}</span><span class="v ${cls}">${T(val)}</span><span class="p ${cls}">${cls ? '—' : pct(val)}</span>`;
+  const segs = v.parts && W ? v.parts.map(p => [p.tokens, CTX_COLOR[p.name] || 'var(--c-gray)']) : v.used !== null && W ? [[v.used, 'var(--c-msg)']] : [];
+  const lc = s.stats && s.stats.lastCompact;
+  return `<div class="isec"><h4>Bağlam <span class="sum" data-ctxsrc="${v.src || 'none'}" title="${esc(tip)}">${sum}</span>${can ? `<button class="act" data-ctxrefresh title="Kategorileri Claude Code /context ile ölç (model çağrılmaz)">${s.ctxReal ? 'Yenile' : 'Ayrıntı'}</button><button class="act" data-ctxcompact="${s.id}" title="Sohbeti sıkıştır (/compact): geçmiş özetlenir, bağlam boşalır">Sıkıştır</button>` : ''}</h4>
       ${s.ctxErr ? `<div class="ctx-err">Ölçülemedi: ${esc(s.ctxErr)}</div>` : ''}
-      <div class="ctx-top"><b>%${Math.round(used/total*100)} kullanıldı</b><span>${fmtT(used)} / ${fmtT(total)}</span></div>
-      <div class="bar">${parts.map(p=>`<i style="width:${p[1]/total*100}%;background:${p[2]}"></i>`).join('')}</div>
-      <div class="leg">
-        ${parts.map(p=>`<span class="sw" style="background:${p[2]}"></span><span class="n">${esc(p[0])}</span><span class="v">${fmtT(p[1])}</span><span class="p">${pct(p[1])}</span>`).join('')}
-        <span class="sw" style="background:var(--c-free)"></span><span class="n">Boş alan</span><span class="v">${fmtT(free)}</span><span class="p">${pct(free)}</span>
-        ${deferred.length ? '<span class="gap"></span>' + deferred.map(c=>`<span class="sw" style="background:var(--c-dark)"></span><span class="n dim" title="Gerektiğinde yüklenir, bağlamda yer kaplamaz">${esc(CU.label(c.name))}</span><span class="v dim">${fmtT(c.tokens)}</span><span class="p dim">—</span>`).join('') : ''}
-      </div>
+      <div class="ctx-top"><b>${v.pct !== null ? '%' + v.pct + ' kullanıldı' : v.used !== null ? T(v.used) + ' kullanıldı' : 'Kullanım bilinmiyor'}</b><span>${v.used !== null ? T(v.used) : '?'} / ${W ? T(W) : 'pencere bilinmiyor'}</span></div>
+      <div class="bar">${segs.map(p => `<i style="width:${p[0] / W * 100}%;background:${p[1]}"></i>`).join('')}</div>
+      ${v.parts ? `<div class="leg">${v.parts.map(p => sw(CTX_COLOR[p.name] || 'var(--c-gray)', p.label, p.tokens)).join('')}
+        ${v.free !== null ? sw('var(--c-free)', 'Boş alan', v.free) : ''}
+        ${v.deferred.length ? '<span class="gap"></span>' + v.deferred.map(c => sw('var(--c-dark)', c.label, c.tokens, 'dim', 'Gerektiğinde yüklenir, bağlamda yer kaplamaz')).join('') : ''}</div>
+        ${s.ctxStale ? '<div class="ctx-note">Kategoriler son turdan önceki ölçümden</div>' : ''}`
+      : `${v.used !== null && W ? `<div class="leg">${sw('var(--c-msg)', 'Kullanılan', v.used)}${sw('var(--c-free)', 'Boş alan', v.free)}</div>` : ''}
+        <div class="ctx-note">Kategoriler bilinmiyor${can ? ' — “Ayrıntı” ile ölç (model çağrılmaz, kullanım harcamaz)' : ''}</div>`}
+      ${lc ? `<div class="ctx-note">Son: ${esc(CU.compactText(lc))}${s.stats.compacts > 1 ? ` · bu sohbette ${s.stats.compacts} kez` : ''}</div>` : ''}
       <div style="margin-top:10px">
         <button class="exp">${ic('chev','chev')}MCP sunucuları<span>${conns.length}</span></button>
         <div class="exp-b">${conns.map(c=>esc(c.name)).join('<br>') || '—'}</div>
-        <button class="exp">${ic('chev','chev')}Hafıza dosyaları<span>${mem.length}</span></button>
-        <div class="exp-b">${mem.join('<br>') || '—'}</div>
+        <button class="exp">${ic('chev','chev')}Hafıza dosyaları<span>${v.memory ? v.memory.length : '?'}</span></button>
+        <div class="exp-b">${v.memory ? v.memory.map(m => `${esc(m.path)} · ${T(m.tokens)}`).join('<br>') || '—' : 'bilinmiyor — “Ayrıntı” ile ölç'}</div>
       </div>
     </div>`;
+}
+/* Kullanım ve maliyet: token toplamı kayıttaki asistan yanıtlarının usage'ından (+ kayda henüz yansımamış canlı tur);
+   maliyet Claude Code'un birikimli sayacı (kayıtta cost-state, panel turunda result.total_cost_usd). Fiyat tablosu ile tahmin yok. */
+function costSection(s){
+  const CU = window.ctxUsage, T = CU.fmtTok;
+  const t = CU.tokenTotals(s.stats, s.tokLive), c = CU.costView(s.stats, s.costPanel);
+  const src = c.src === 'record' ? 'Claude Code oturum kaydından · panel dışı turlar dahil' : c.src === 'panel' ? (c.withOutside ? 'son panel turundan · panel dışı turlar dahil' : 'yalnızca panel turları · panel dışı turlar dahil değil') : 'Bu sohbette maliyet kaydı yok';
+  return `<div class="isec" data-costsec><h4>Kullanım ve maliyet <span class="sum">${s.stats || s.tokLive ? 'bu sohbet' : 'bilinmiyor'}</span></h4>
+    <div class="cu-row"><span>Token</span><b data-tok>${t ? T(t.total) : 'bilinmiyor'}</b></div>
+    ${t ? `<div class="ctx-note" title="Ana sohbetteki yanıtların usage alanları; alt ajan ve sıkıştırma çağrıları hariç">girdi ${T(t.input)} · çıktı ${T(t.output)} · önbellekten okunan ${T(t.cacheRead)} · önbelleğe yazılan ${T(t.cacheCreate)}</div>` : ''}
+    <div class="cu-row"><span>Maliyet</span><b data-cost>${c.usd !== null ? CU.fmtUsd(c.usd) : 'bilinmiyor'}</b></div>
+    <div class="ctx-note" data-costsrc="${c.src || 'none'}">${esc(src)}${c.usd !== null ? ' · API liste fiyatı karşılığı (abonelikte ayrıca ödenmez)' : ''}${c.unknownModel ? ' · bazı modellerin fiyatı bilinmiyor' : ''}</div>
+  </div>`;
+}
+/* "Sıkıştır": /compact kullanıcı mesajı olarak gönderilir (başsız stream-json modunda çalışır: status compacting →
+   compact_boundary → result, model çağrısı yalnızca özet için). Tur sürüyorsa sıraya girer; başka yerde açık sohbet sıkıştırılmaz. */
+async function compactSession(s){
+  if(!s || s.draft || !s.uuid) return;
+  if(s.status === 'elsewhere' && !s.run) return toast('Bu sohbet başka yerde açık: sıkıştırmayı orada yap ya da kapanmasını bekle');
+  if(!S.auth || !S.auth.loggedIn){ await checkAuth(); if(!S.auth.loggedIn) return toast('Önce Claude Code girişi yapılmalı'); }
+  if(s.run){ (s.queue = s.queue || []).push({text:'/compact', att:[]}); s.queuePaused = false; renderPanes(); return toast(`Sıkıştırma sıraya eklendi · ${s.queue.length}. sırada`); }
+  toast('Sohbet sıkıştırılıyor…');
+  await sendNow(s, '/compact', []);
 }
 async function refreshCtx(s, quiet){
   if(!s || !s.uuid || s.draft || s.ctxLoading) return;
@@ -1228,6 +1246,7 @@ document.addEventListener('click', e => {
     if(d.m==='sort') setSort(d.k);
     if(d.m==='pmode'){ sess(d.id).pmode = d.v; renderPanes(); focusTa(d.id); }
     if(d.m==='model'){ sess(d.id).modelPick = d.v || null; renderPanes(); focusTa(d.id); }
+    if(d.m==='fastmode'){ const fs = sess(d.id); fs.fast = !fs.fast; renderPanes(); persist(); focusTa(d.id); toast(fs.fast ? 'Hızlı mod açık (sonraki mesajdan itibaren)' : 'Hızlı mod kapalı'); }
     if(d.m==='ctlinstall'){ closeMenu(); installDesktop(sess(d.id)); return; }
     if(d.m==='ctlbrowser'){ closeMenu(); setControl(sess(d.id), true); return; }
     if(d.m==='effort'){ const es = sess(d.id); es.effort = d.v || null; WS.prefs = {...(WS.prefs||{}), effort:d.v || null}; renderPanes(); persist(); focusTa(d.id); }
@@ -1354,6 +1373,7 @@ document.addEventListener('click', e => {
   const at = t.closest('[data-attach]'); if(at){ pickAttachments(+at.dataset.attach); return; }
   const ua = t.closest('[data-unattach]'); if(ua){ const s = sess(ua.dataset.sid); s.attach.splice(+ua.dataset.unattach, 1); renderPanes(); return; }
   if(t.closest('[data-ctxrefresh]')){ refreshCtx(sess(S.panes[S.active])); return; }
+  const cmpb = t.closest('[data-ctxcompact]'); if(cmpb){ compactSession(sess(cmpb.dataset.ctxcompact)); return; }
   if(t.closest('[data-mcpcheck]')){ const s = sess(S.panes[S.active]); if(s) checkConnectors(s); return; }
   if(t.closest('[data-login]')){ API.claude.login(); toast('Terminal açıldı: girişi tarayıcıda tamamla, sonra "Tekrar kontrol et"'); let n = 0; const iv = setInterval(async () => { n++; const a = await checkAuth(); if(a.loggedIn || n > 40){ clearInterval(iv); if(a.loggedIn) toast('Giriş tamam — artık panelden yazabilirsin'); } }, 3000); return; }
   if(t.closest('[data-authcheck]')){ checkAuth().then(a => toast(a.loggedIn ? 'Giriş tamam' : 'Hâlâ giriş yapılmamış')); return; }
@@ -1367,7 +1387,7 @@ document.addEventListener('click', e => {
   const us = t.closest('[data-usage]'); if(us){ const r = us.getBoundingClientRect(); usageMenu(r.left - 80, r.top - 330); return; }
   const eff = t.closest('[data-effort]'); if(eff){ const r = eff.getBoundingClientRect(); const s = sess(eff.dataset.effort); const cur = effortOf(s);
     menu(r.left - 40, r.top - 236, `<div class="mh">Düşünme seviyesi</div>${EFFORTS.map(([k,l,d]) => `<button data-m="effort" data-id="${s.id}" data-v="${k||''}" title="${esc(d)}">${cur===k?'✓ ':'&nbsp;&nbsp;&nbsp;'}${l}</button>`).join('')}`); return; }
-  const mdl = t.closest('[data-model]'); if(mdl){ const r = mdl.getBoundingClientRect(); const s = sess(mdl.dataset.model); menu(r.left - 60, r.top - 160, `<div class="mh">Model</div>${MODELS.map(([k,l]) => `<button data-m="model" data-id="${s.id}" data-v="${k||''}">${(s.modelPick||null)===k?'✓ ':'&nbsp;&nbsp;&nbsp;'}${l}${k?'':' · '+esc(s.model)}</button>`).join('')}`); return; }
+  const mdl = t.closest('[data-model]'); if(mdl){ const r = mdl.getBoundingClientRect(); const s = sess(mdl.dataset.model); menu(r.left - 60, r.top - 260, modelMenuHTML(s)); return; }
   const rpl = t.closest('[data-reply]'); if(rpl){ const s = sess(rpl.dataset.sid), i = S.panes.indexOf(s && s.id); const ta = i >= 0 && document.querySelector(`[data-ta="${i}"]`);
     if(ta){ ta.value = rpl.dataset.reply; s.inputDraft = ta.value; send(i); } else toast('Önce sohbeti bir bölmede aç'); return; }
   const fsd = t.closest('[data-fsend]'); if(fsd){ const i = +fsd.dataset.i, fs = sess(S.panes[i]); if(fs) fs.askFork = false; send(i, fsd.dataset.fsend === 'fork' ? {fork:true} : {force:true}); return; }
@@ -1685,6 +1705,7 @@ const ownWrite = (s, x) => !!s.ownAt && (x.mtimeMs || 0) <= s.ownAt + 15000;
 function fromSummary(x, prev){
   if(prev){
     const aliased = prev.title !== prev.rawTitle;
+    if(x.modelId) prev.modelId = x.modelId;
     Object.assign(prev, {rawTitle:x.title, project:x.project, cwd:x.cwd, lastTs:x.lastTs, ago:fmtAgo(x.lastTs), model:x.model || '—', ctx:x.ctxTokens/1000, bridge:x.bridge,
       permissionMode:x.permissionMode, status: prev.run ? 'running' : (x.live && !ownWrite(prev, x) ? 'elsewhere' : 'idle')});
     if(!aliased) prev.title = x.title;
@@ -1695,6 +1716,7 @@ function fromSummary(x, prev){
     title: meta.alias || x.title, rawTitle:x.title, project:x.project, cwd:x.cwd,
     folder: meta.folder && fold(meta.folder) ? meta.folder : null, pinned:!!meta.pinned, trashed:!!meta.trashed, hidden:!!meta.hidden,
     ...('effort' in meta ? {effort: meta.effort} : {}), ...('control' in meta ? {control: !!meta.control} : {}),
+    ...(meta.fast ? {fast: true} : {}), ...(meta.cost && typeof meta.cost.usd === 'number' ? {costPanel: meta.cost} : {}), modelId:x.modelId || null,
     lastTs:x.lastTs, ago:fmtAgo(x.lastTs), model:x.model || '—', ctx:x.ctxTokens/1000, bridge:x.bridge, permissionMode:x.permissionMode, status: x.live ? 'elsewhere' : 'idle'};
 }
 
@@ -1708,8 +1730,9 @@ async function ensureLoaded(id, force){
       const d = await API.sessions.load(s.uuid, 60);
       // Yükleme sürerken gönderilen mesaj ve canlı yanıt (local) korunur; tur bitince diskteki kayıt onları zaten içerir
       const keep = s.run ? s.msgs.filter(m => m.local) : [];
-      s.msgs = d.msgs.map(m => m.r==='u' ? m : {r:'a', b:m.b.map(b => b.t==='text' ? {t:'text', v:mdMemo(b.v)} : {...b, n:shortTool(b.n)})});
+      s.msgs = d.msgs.map(m => m.r!=='a' ? m : {r:'a', b:m.b.map(b => b.t==='text' ? {t:'text', v:mdMemo(b.v)} : {...b, n:shortTool(b.n)})});
       s.msgs.push(...keep);
+      if(d.stats) onStats(s, d.stats);
       s.outputs = d.outputs.map(o => o.path); s.skipped = d.skipped; s.turns = d.turns; s.loadErr = null;
     } catch(e){ if(!s.msgs.length) s.loadErr = String(e && e.message || e); else console.warn('yeniden yüklenemedi', e); }
     s.loaded = true; loading.delete(id);
@@ -1719,6 +1742,14 @@ async function ensureLoaded(id, force){
   loading.set(id, job); return job;
 }
 
+// Kayıttan gelen kullanım özeti (sessions.js tally): token, son bağlam, maliyet, sıkıştırmalar. Panel dışında (başka
+// yerde açık sohbet) otomatik sıkıştırma olduysa bildirilir; panelin kendi turundaki sıkıştırma akıştan zaten bildirildi.
+function onStats(s, st){
+  const prev = s.stats;
+  if(prev && st.compacts > prev.compacts && st.lastCompact && st.lastCompact.trigger === 'auto' && !s.liveCompacted){ const pi = S.panes.indexOf(s.id); toast(`${pi >= 0 ? 'Bölme ' + (pi + 1) + ' · ' : ''}${s.title.slice(0, 40)}: bağlam doldu, sohbet otomatik sıkıştırıldı`); }
+  s.stats = st; s.liveCompacted = false;
+  if(!s.run){ s.tokLive = null; if(st.ctx !== null) s.ctx = st.ctx / 1000; } // canlı tur kayda yansıdı
+}
 let saveT = null;
 function buildWS(){
     // Şu an listede olmayan oturumların bilgisi (klasör, ad…) silinmez: oturum listesi bir an eksik gelse de veri kaybolmaz
@@ -1726,7 +1757,7 @@ function buildWS(){
     Object.entries(WS.meta || {}).forEach(([k, v]) => { if(!sess(k)) meta[k] = v; });
     S.sessions.forEach(s => { const m = {};
       if(s.folder) m.folder = s.folder; if(s.pinned) m.pinned = true; if(s.title !== s.rawTitle) m.alias = s.title;
-      if(s.trashed) m.trashed = true; if(s.hidden) m.hidden = true; if(s.effort !== undefined) m.effort = s.effort; if(s.control !== undefined) m.control = s.control; if(Object.keys(m).length) meta[s.id] = m; });
+      if(s.trashed) m.trashed = true; if(s.hidden) m.hidden = true; if(s.effort !== undefined) m.effort = s.effort; if(s.control !== undefined) m.control = s.control; if(s.fast) m.fast = true; if(s.costPanel) m.cost = s.costPanel; if(Object.keys(m).length) meta[s.id] = m; });
     const graphPos = {}; Object.entries(G.pos).forEach(([k,p]) => { if(p.fixed) graphPos[k] = {x:Math.round(p.x), y:Math.round(p.y)}; });
     WS = {...WS, firstRun:false, meta, graphPos, prefs:{...(WS.prefs||{}), fonts:{...FONT}, fontsV:2},
       folders: S.folders.map(({id,name,color,parent,open,dir,trashed,hidden}) => ({id,name,color,parent,open,dir,trashed,hidden})),
@@ -1816,7 +1847,15 @@ async function boot(){
 /* ---------- Faz 2: panelden Claude çalıştırma ---------- */
 const RUNS = new Map(); // runId -> session id
 const PMODES = [['acceptEdits','Dosya düzenlemeye izin'],['bypassPermissions','Tam yetki'],['auto','Otomatik (sınıflandırıcı)'],['plan','Plan modu (değişiklik yok)'],['manual','İzin gerekenleri reddet']];
-const MODELS = [[null,'Oturumun modeli'],['opus','Opus'],['sonnet','Sonnet'],['haiku','Haiku']];
+const MODELS = [[null,'Oturumun modeli'], ...window.modelInfo.LIST.map(m => [m.alias, m.label])]; // tam kimlik ve pencere: models.js
+// Model menüsü: her seçenekte tam kimlik ve bağlam penceresi; altta oturum başına hızlı mod (--fast-mode on)
+function modelMenuHTML(s){
+  const MI = window.modelInfo, cur = s.modelPick || null;
+  const meta = v => { const m = MI.find(v), id = m ? m.id : v, w = MI.windowOf(v); return id ? `<span class="mm-id mono">${esc(id)}${w ? ' · ' + MI.fmtWindow(w) : ''}</span>` : ''; };
+  const rows = MODELS.map(([k, l]) => `<button data-m="model" data-id="${s.id}" data-v="${k || ''}"><span class="mm-ck">${cur === k ? '✓' : ''}</span><span class="mm-l">${esc(l)}${k ? '' : ' · ' + esc(s.model || '—')}</span>${meta(k || s.modelId)}</button>`).join('');
+  const note = MI.fastNote(s.fastInfo);
+  return `<div class="mh">Model</div>${rows}<hr><button data-m="fastmode" data-id="${s.id}" title="Claude Code hızlı modu (--fast-mode on): aynı model daha hızlı yanıt verir; hesapta ek kullanım gerekir"><span class="mm-ck">${s.fast ? '✓' : ''}</span><span class="mm-l">Hızlı mod</span><span class="mm-id">${s.fast ? 'açık' : 'kapalı'}</span></button>${note ? `<div class="mm-note">${esc(note)}</div>` : ''}`;
+}
 // Düşünme seviyesi (claude --effort). Seçim oturumda saklanır; son seçim yalnızca yeni sohbetlere varsayılan olur
 // (seçimi olmayan mevcut oturumlar Claude Code'un kendi varsayılanıyla çalışır).
 const EFFORTS = [[null,'Varsayılan','Claude Code ayarındaki seviye'],['low','Düşük','Hızlı, az düşünür'],['medium','Orta',''],['high','Yüksek',''],['xhigh','Çok yüksek',''],['max','En yüksek','En yavaş, en derin']];
@@ -1848,7 +1887,7 @@ function focusTa(id){ const i = S.panes.slice(0, nPanes()).indexOf(id); if(i < 0
 const DEFAULT_PMODE = 'bypassPermissions';
 const pmodeOf = s => s.pmode || DEFAULT_PMODE;
 const pmodeLabel = s => (PMODES.find(p => p[0]===pmodeOf(s)) || PMODES[0])[1];
-const modelLabel = s => s.modelPick ? (MODELS.find(m => m[0]===s.modelPick) || [0,s.modelPick])[1] : s.model;
+const modelLabel = s => (s.modelPick ? (MODELS.find(m => m[0]===s.modelPick) || [0,s.modelPick])[1] : s.model) + (s.fast ? ' · hızlı' : '');
 // Claude uygulamasının tur araçları (sessions.js turnCard ile aynı): wrap_up → sonraki adım kartı, update_plan → görev listesi
 function turnCard(name, input){
   if(!input || typeof name !== 'string') return null;
@@ -1923,7 +1962,7 @@ async function sendNow(s, text, att, opt = {}){
   RUNS.set(runId, s.id);
   render(); { const pi = S.panes.indexOf(s.id); if(pi >= 0) scrollPaneBottom(pi); }
   try {
-    await API.run.start({runId, sessionId:s.uuid, newSession:isNew, fork:!!opt.fork, cwd:s.cwd || s.project, text, images, files, model:s.modelPick || (isNew ? s.newModel : null), permissionMode:pmodeOf(s), effort:effortOf(s), control:controlOf(s)});
+    await API.run.start({runId, sessionId:s.uuid, newSession:isNew, fork:!!opt.fork, cwd:s.cwd || s.project, text, images, files, model:s.modelPick || (isNew ? s.newModel : null), permissionMode:pmodeOf(s), effort:effortOf(s), control:controlOf(s), fast:s.fast === true});
     s.draft = false; return true;
   } catch(e){
     RUNS.delete(runId); s.run = null; s.status = 'idle'; live.streaming = false;
@@ -2020,6 +2059,19 @@ function usageMenu(x, y){
     ${USAGE ? `<div class="use-s" style="padding:6px 9px 4px;border-top:1px solid var(--line);margin-top:4px">Son güncelleme: ${ago < 1 ? 'az önce' : ago < 60 ? ago + ' dk önce' : Math.round(ago / 60) + ' sa önce'} · her yanıttan sonra yenilenir</div>` : ''}`);
 }
 
+/* Sıkıştırma (akış): status "compacting" → canlı mesajda "sıkıştırılıyor"; compact_boundary → sohbete satır, bağlam
+   sıkıştırma sonrası boyuta iner. Otomatik sıkıştırmada (compact_metadata.trigger: auto) ayrıca bildirim gösterilir. */
+function onCompactEvent(s, ev){
+  const L = s.run.live;
+  if(ev.subtype === 'status'){ const on = ev.status === 'compacting'; if(!!L.compacting !== on){ L.compacting = on; scheduleLive(s); } return; }
+  const c = window.ctxUsage.compactOf(ev);
+  L.compacting = false; s.liveCompacted = true;
+  s.msgs.splice(Math.max(0, s.msgs.indexOf(L)), 0, {r:'c', ...c, local:true});
+  if(c.post !== null) s.ctx = c.post / 1000;
+  s.ctxStale = !!s.ctxReal;
+  if(c.trigger === 'auto'){ const pi = S.panes.indexOf(s.id); toast(`${pi >= 0 ? 'Bölme ' + (pi + 1) + ' · ' : ''}Bağlam doldu: sohbet otomatik sıkıştırıldı`); }
+  scheduleLive(s); if(S.info && S.panes[S.active] === s.id) renderInfo();
+}
 function onRun(p){
   const id = RUNS.get(p.runId); let s = id && sess(id);
   if(!s || !s.run) return;
@@ -2028,11 +2080,12 @@ function onRun(p){
     const ev = p.ev;
     if(ev.type === 'system' && ev.subtype === 'init'){
       if(R.fork && ev.session_id && ev.session_id !== s.uuid) s = forkTo(s, ev.session_id);
-      s.connectorsLive = ev.mcp_servers || []; if(ev.model) s.model = prettyModelR(ev.model);
+      s.connectorsLive = ev.mcp_servers || []; if(ev.model){ s.model = prettyModelR(ev.model); s.modelId = ev.model; }
       if(S.panes[S.active] === s.id) renderInfo();
       return;
     }
     if(ev.type === 'rate_limit_event'){ onRateLimit(ev.rate_limit_info); return; }
+    if(ev.type === 'system' && (ev.subtype === 'compact_boundary' || ev.subtype === 'status')){ onCompactEvent(s, ev); return; }
     if(ev.parent_tool_use_id) return; // alt ajan mesajları
     if(ev.type === 'stream_event' && ev.event){
       const e = ev.event;
@@ -2047,13 +2100,18 @@ function onRun(p){
           const fp = c.input && (c.input.file_path || c.input.notebook_path); if(fp && /^(Write|Edit|MultiEdit|NotebookEdit)$/.test(c.name) && !s.outputs.includes(fp)) s.outputs.unshift(fp); }
       }
       const u = ev.message.usage; if(u && ev.message.model !== '<synthetic>') s.ctx = ((u.input_tokens||0) + (u.cache_read_input_tokens||0) + (u.cache_creation_input_tokens||0) + (u.output_tokens||0)) / 1000;
+      s.tokLive = window.ctxUsage.liveAdd(s.tokLive, ev.message); // kayda yansıyana kadar token toplamına eklenir
       scheduleLive(s); return;
     }
     if(ev.type === 'user' && ev.message && Array.isArray(ev.message.content)){
       for(const c of ev.message.content) if(c.type === 'tool_result'){ const t = R.tools.get(c.tool_use_id); if(t){ t.o = resText(c.content).slice(0,1500); t.running = false; if(c.is_error) t.err = true; const im = liveImgs(c.content); if(im.length) t.imgs = im; } }
       scheduleLive(s); return;
     }
-    if(ev.type === 'result'){ R.result = ev; const w = window.ctxUsage.windowOf(ev.modelUsage); if(w) s.ctxWindow = w; return; }
+    if(ev.type === 'result'){ R.result = ev; const w = window.ctxUsage.windowOf(ev.modelUsage); if(w) s.ctxWindow = w;
+      // total_cost_usd oturumun birikimli maliyetidir (CLI sayacı cost-state kaydından geri yükler): toplanmaz, son değer saklanır
+      if(typeof ev.total_cost_usd === 'number' && isFinite(ev.total_cost_usd)) s.costPanel = {usd:ev.total_cost_usd, at:Date.now()};
+      if(ev.fast_mode_state) s.fastInfo = {state:ev.fast_mode_state, reason:ev.fast_mode_disabled_reason || null};
+      return; }
     return;
   }
   if(p.type === 'permission' || p.type === 'permission-cancel') return onPermission(p);

@@ -163,7 +163,7 @@ const winQuote = a => { a = String(a); if (CMD_UNSAFE.test(a)) throw new Error('
 // ---- Girdi doğrulama (renderer'dan gelen değerler ana süreçte yeniden denetlenir) ----
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const PERMISSION_MODES = new Set(['default', 'acceptEdits', 'bypassPermissions', 'plan', 'auto', 'dontAsk', 'manual']);
-const MODEL_RX = /^(opus|sonnet|haiku|default|claude-[a-z0-9.-]+(\[1m\])?)$/i;
+const MODEL_RX = /^((opus|sonnet|haiku|fable)(\[1m\])?|default|claude-[a-z0-9.-]+(\[1m\])?)$/i;
 const EFFORTS = new Set(['low', 'medium', 'high', 'xhigh', 'max']); // claude --effort
 function checkUuid(id) { if (!UUID.test(String(id))) throw new Error('Geçersiz oturum kimliği'); return String(id); }
 function checkDir(p) {
@@ -253,7 +253,7 @@ class Runner {
     this.runs = new Map();      // runId -> {proc, sessionId, ...}
   }
   /**
-   * opts: {runId, sessionId?, newSession?, fork?, cwd, text, model?, permissionMode?, effort?, control?}
+   * opts: {runId, sessionId?, newSession?, fork?, cwd, text, model?, permissionMode?, effort?, control?, fast?}
    * Dönüş: {runId, sessionId} — yeni sohbette sessionId önceden üretilir (--session-id).
    */
   async start(opts) {
@@ -265,6 +265,7 @@ class Runner {
     if (opts.model && !MODEL_RX.test(String(opts.model))) throw new Error('Geçersiz model: ' + opts.model);
     if (opts.permissionMode && !PERMISSION_MODES.has(opts.permissionMode)) throw new Error('Geçersiz izin modu: ' + opts.permissionMode);
     if (opts.effort && !EFFORTS.has(opts.effort)) throw new Error('Geçersiz düşünme seviyesi: ' + String(opts.effort).slice(0, 20));
+    if (opts.fast !== undefined && opts.fast !== null && typeof opts.fast !== 'boolean') throw new Error('Geçersiz hızlı mod değeri');
     const runId = opts.runId || crypto.randomUUID();
     const args = ['-p', '--input-format', 'stream-json', '--output-format', 'stream-json', '--verbose', '--include-partial-messages'];
     let sessionId = opts.sessionId;
@@ -273,6 +274,10 @@ class Runner {
     if (opts.model) args.push('--model', opts.model);
     if (opts.permissionMode) args.push('--permission-mode', opts.permissionMode);
     if (opts.effort) args.push('--effort', opts.effort);
+    // Hızlı mod: `--fast-mode on` CLI'nin bayrak ayarlarına fastMode:true yazar; başsız modda bu açık istek olmadan
+    // hızlı mod "sdk_opt_in_required" nedeniyle kapalı kalır (CLI 2.1.318'de denendi). Kullanılabilirliği hesap belirler;
+    // sonuç result.fast_mode_state / fast_mode_disabled_reason ile döner. Kapalıyken bayrak verilmez (CLI varsayılanı).
+    if (opts.fast === true) args.push('--fast-mode', 'on');
     if (opts.control) { // bilgisayar kontrolü: tarayıcı (Claude in Chrome) + varsa masaüstü (agent-desktop)
       args.push('--chrome');
       const ad = await desktopTool(env);

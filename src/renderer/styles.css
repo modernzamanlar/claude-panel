@@ -171,6 +171,17 @@ svg.i{width:16px;height:16px;flex:none;fill:none;stroke:currentColor;stroke-widt
 .leg .dim{color:var(--faint)}
 .isec h4 [data-ctxrefresh]{font-weight:400;font-size:12px;color:var(--muted);text-decoration:underline;text-underline-offset:3px}
 .ctx-err{font-size:12px;color:#c0392b;margin:-4px 0 8px}
+.isec h4 [data-ctxcompact]{font-weight:400;font-size:12px;color:var(--muted);text-decoration:underline;text-underline-offset:3px}
+.ctx-note{font-size:12px;color:var(--faint);margin-top:6px;line-height:1.4}
+.cu-row{display:flex;justify-content:space-between;align-items:baseline;font-size:12.5px;color:var(--muted);margin-top:4px;font-variant-numeric:tabular-nums}
+.cu-row b{color:var(--text);font-weight:600}
+.cmp-line{display:flex;align-items:center;gap:10px;margin:6px 0;font:12px var(--sans);color:var(--muted)}
+.cmp-line::before,.cmp-line::after{content:"";flex:1;border-top:1px dashed var(--line2)}
+.cmp-line.auto{color:var(--accent-text)}
+.menu .mm-ck{width:12px;flex:none;text-align:center}
+.menu .mm-l{flex:1;white-space:nowrap}
+.menu .mm-id{margin-left:10px;font-size:11.5px;color:var(--faint);white-space:nowrap}
+.menu .mm-note{padding:2px 9px 6px 29px;font-size:11.5px;color:var(--faint);max-width:300px;line-height:1.35}
 .exp{display:flex;align-items:center;gap:6px;color:var(--muted);padding:3px 0;font-size:12.5px;width:100%}
 .exp .chev{width:12px;height:12px;transition:transform .15s}
 .exp.open .chev{transform:rotate(90deg)}

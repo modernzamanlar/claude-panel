@@ -11,7 +11,7 @@ const { execFileSync } = require('child_process');
 const FAKE = path.join(__dirname, 'fake-claude.js');
 process.env.CLAUDE_PANEL_CLAUDE_BIN = FAKE;
 const R = require('../src/main/runner');
-const { Runner, authStatus, openLoginTerminal, openRemoteTerminal, mcpList, claudeBin, loginEnv, launchSpec, controlStatus, installDesktop, desktopMcp, _test } = R;
+const { Runner, authStatus, openLoginTerminal, openRemoteTerminal, mcpList, contextUsage, claudeBin, loginEnv, launchSpec, controlStatus, installDesktop, desktopMcp, _test } = R;
 const { deps } = _test;
 const REAL = { ...deps };
 const ENV0 = { ...process.env };
@@ -850,4 +850,76 @@ test('Uzaktan Kontrol / giriş: Terminal açılamazsa hata verir (sessizce "aç�
   const sh = { opened: [], openPath: async f => { sh.opened.push(f); return 'No application knows how to open'; } };
   await assert.rejects(openRemoteTerminal(sh, { sessionId: ID, cwd: fs.realpathSync(tmp('qr fd ')), name: 'x' }), /Terminal açılamadı: No application/);
   await assert.rejects(openLoginTerminal(sh), /Terminal açılamadı/);
+});
+
+// ================= Hızlı mod ve model adları =================
+test('start: hızlı mod yalnızca true iken --fast-mode on ekler; boolean olmayan değer süreç başlatmadan reddedilir', async () => {
+  const { calls } = fakeSpawn(); const { runner } = collect();
+  const cwd = tmp();
+  await runner.start({ sessionId: ID, effort: 'low', fast: true, ephemeral: true, cwd, text: 't' });
+  const a = calls[0].args;
+  assert.deepEqual(a.slice(a.indexOf('--effort'), a.indexOf('--permission-prompt-tool')), ['--effort', 'low', '--fast-mode', 'on']);
+  for (const fast of [false, null, undefined]) await runner.start({ sessionId: ID, fast, ephemeral: true, cwd, text: 't' });
+  assert.ok(calls.slice(1).every(c => !c.args.includes('--fast-mode')));
+  for (const bad of ['on', 1, 'true --model x', {}]) await assert.rejects(runner.start({ sessionId: ID, fast: bad, cwd, text: 't' }), /^Error: Geçersiz hızlı mod değeri$/);
+  assert.equal(calls.length, 4);
+});
+
+test('start: model takma adları (fable dahil) ve [1m] soneki kabul edilir; benzer görünen adlar reddedilir', async () => {
+  const { calls } = fakeSpawn(); const { runner } = collect();
+  const cwd = tmp();
+  for (const model of ['fable', 'FABLE', 'opus[1m]', 'sonnet[1m]', 'claude-fable-5-1', 'claude-haiku-5-5[1m]']) await runner.start({ sessionId: ID, cwd, model, text: 't' });
+  assert.deepEqual(calls.map(c => c.args[c.args.indexOf('--model') + 1]), ['fable', 'FABLE', 'opus[1m]', 'sonnet[1m]', 'claude-fable-5-1', 'claude-haiku-5-5[1m]']);
+  for (const bad of ['fables', 'opus[2m]', 'default[1m]', 'fable opus', '[1m]']) await assert.rejects(runner.start({ sessionId: ID, cwd, model: bad, text: 't' }), /^Error: Geçersiz model: /);
+  assert.equal(calls.length, 6);
+});
+
+// ================= contextUsage (/context) =================
+// Gerçek CLI 2.1.318: `claude -p /context --resume <id> --no-session-persistence --output-format json` model çağırmaz
+// (num_turns 0, usage sıfır, total_cost_usd değişmez), ~4 sn sürer, kayda hiçbir satır eklemez.
+const ctxFx = n => fs.readFileSync(path.join(__dirname, 'fixtures', n), 'utf8');
+test('contextUsage: rapor ayrıştırılır; oturumu değiştirmeyen sabit argümanlar, zaman aşımı ve stdin kapatma', async () => {
+  const calls = []; let ended = 0;
+  deps.execFile = (file, args, o, cb) => { calls.push({ file, args, o }); setImmediate(() => cb(null, ctxFx('context-opus-1m.json'), '')); return { stdin: { end: () => ended++ } }; };
+  const dir = tmp();
+  const r = await contextUsage(ID, dir);
+  assert.equal(r.window, 1000000); assert.equal(r.total, 40800);
+  assert.ok(r.categories.some(c => c.name === 'Messages'));
+  assert.ok(Math.abs(r.at - Date.now()) < 5000);
+  assert.equal(calls[0].file, FAKE);
+  assert.deepEqual(calls[0].args, ['-p', '/context', '--resume', ID, '--no-session-persistence', '--output-format', 'json']);
+  assert.equal(calls[0].o.cwd, dir); assert.equal(calls[0].o.timeout, 60000); assert.equal(calls[0].o.maxBuffer, 16 * 1024 * 1024); assert.equal(calls[0].o.windowsHide, true);
+  assert.equal(ended, 1);
+  const r2 = await contextUsage(ID, dir, { model: 'claude-opus-5-5[1m]' });
+  assert.deepEqual(calls[1].args.slice(-2), ['--model', 'claude-opus-5-5[1m]']);
+  assert.equal(r2.total, 40800);
+});
+
+test('contextUsage: stdin.end hata fırlatsa da sonuç döner', async () => {
+  deps.execFile = (file, args, o, cb) => { setImmediate(() => cb(null, ctxFx('context-haiku.json'), '')); return { stdin: { end: () => { throw new Error('EPIPE'); } } }; };
+  assert.equal((await contextUsage(ID, tmp())).window, 200000);
+});
+
+test('contextUsage: geçersiz kimlik, klasör ve model süreç başlatmadan reddedilir', async () => {
+  let n = 0; deps.execFile = () => { n++; };
+  await assert.rejects(contextUsage('../x', tmp()), /^Error: Geçersiz oturum kimliği$/);
+  await assert.rejects(contextUsage(ID, path.join(tmp(), 'yok')), /^Error: Çalışma klasörü bulunamadı: /);
+  await assert.rejects(contextUsage(ID, tmp(), { model: 'x; rm -rf' }), /^Error: Geçersiz model: x; rm -rf$/);
+  assert.equal(n, 0);
+});
+
+test('contextUsage: claude bulunamazsa açık hata', async () => {
+  // Ev klasöründeki ~/.local/bin her iki kipte de aranır: gerçek CLI'nin bulunmadığı kip seçilir
+  // (Windows makinesinde claude.exe vardır → Mac kipi; Mac'te claude vardır → Windows kipi)
+  if (process.platform === 'win32') { delete process.env.CLAUDE_PANEL_CLAUDE_BIN; deps.platform = 'darwin'; process.env.PATH = tmp(); }
+  else noClaudeWin();
+  await assert.rejects(contextUsage(ID, tmp()), /^Error: claude komutu bulunamadı$/);
+});
+
+test('contextUsage: CLI hatası stderr ile (son 300 karakter), stderr yoksa hata iletisiyle, hiçbiri yoksa genel iletiyle döner', async () => {
+  const run = (err, out, errOut) => { deps.execFile = (f, a, o, cb) => { setImmediate(() => cb(err, out, errOut)); }; return contextUsage(ID, tmp()); };
+  await assert.rejects(run(new Error('exit 1'), '', 'No conversation found with session ID: x\n'), /^Error: No conversation found with session ID: x$/);
+  await assert.rejects(run(new Error('exit 1'), '', 'E'.repeat(400)), { message: 'E'.repeat(300) });
+  await assert.rejects(run(new Error('zaman aşımı'), undefined, ''), /^Error: zaman aşımı$/);
+  await assert.rejects(run(null, '{"result":"Unknown command"}', undefined), /^Error: Bağlam bilgisi okunamadı$/);
 });

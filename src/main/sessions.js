@@ -7,6 +7,7 @@ const path = require('path');
 const os = require('os');
 const crypto = require('crypto');
 const readline = require('readline');
+const tally = require('./tally');
 
 const HOME = os.homedir();
 const PROJECTS_DIR = path.join(HOME, '.claude', 'projects');
@@ -128,7 +129,7 @@ async function summarize(file) {
     }
     if (!cwd) cwd = e.attachment?.snapshot?.workingDirectory || null;
   }
-  let title = null, lastTs = null, model = null, usage = null, lastPrompt = null, bridge = false, permissionMode = null;
+  let title = null, lastTs = null, model = null, usage = null, lastPrompt = null, bridge = false, permissionMode = null, postCompact = null;
   for (const e of tail) {
     if (e.type === 'custom-title' && e.customTitle) title = e.customTitle;
     if (e.type === 'last-prompt' && e.lastPrompt) lastPrompt = e.lastPrompt;
@@ -138,12 +139,14 @@ async function summarize(file) {
     if (!cwd && e.cwd) cwd = e.cwd;
     if (e.type === 'assistant' && e.message && !e.isSidechain) {
       if (e.message.model && e.message.model !== '<synthetic>') model = e.message.model;
-      if (e.message.usage) usage = e.message.usage;
+      if (e.message.usage) { usage = e.message.usage; postCompact = null; }
     }
+    // Son yanıttan sonra sıkıştırıldıysa bağlam sıkıştırma sonrası boyuttadır
+    if (e.type === 'system' && e.subtype === 'compact_boundary') { const c = tally.compactOf(e); if (c.post !== null) { usage = null; postCompact = c.post; } }
   }
   // Kuyrukta başlık kaydı yoksa baştakine bak (başlık erken verilip oturum uzadıysa kaybolmasın)
   if (!title) for (const e of head) if (e.type === 'custom-title' && e.customTitle) title = e.customTitle;
-  const ctxTokens = usage ? (usage.input_tokens || 0) + (usage.cache_read_input_tokens || 0) + (usage.cache_creation_input_tokens || 0) + (usage.output_tokens || 0) : 0;
+  const ctxTokens = usage ? (usage.input_tokens || 0) + (usage.cache_read_input_tokens || 0) + (usage.cache_creation_input_tokens || 0) + (usage.output_tokens || 0) : postCompact || 0;
   const fallback = (firstPrompt || lastPrompt || '').replace(/\s+/g, ' ').slice(0, 70);
   return {
     id, file, size, mtimeMs: st.mtimeMs,
@@ -247,11 +250,13 @@ function resultText(content) {
  * Ayrıca Write/Edit/NotebookEdit ile değiştirilen dosyaları "çıktılar" olarak toplar.
  */
 // Ayrıştırma durumu satır satır beslenir; tam okuma (loadSession) ve artımlı okuma (SessionLoader) aynı kodu kullanır.
-const newParse = () => ({ msgs: [], toolById: new Map(), outputs: new Map(), turns: 0 });
+const newParse = () => ({ msgs: [], toolById: new Map(), outputs: new Map(), turns: 0, tally: tally.newTally() });
 function feedLine(st, line) {
   if (!line) return;
   let e; try { e = JSON.parse(line); } catch { return; }
   if (!e || e.isSidechain) return; // "null" satırı da atlanır
+  // Kullanım/maliyet özeti; sıkıştırma sohbette ayrı bir satır olarak gösterilir
+  const cmp = tally.feed(st.tally, e); if (cmp) { st.msgs.push({ r: 'c', ...cmp }); return; }
   if (e.type === 'user' && e.message) {
     const c = e.message.content;
     if (Array.isArray(c) && c.some(x => x.type === 'tool_result')) {
@@ -261,7 +266,7 @@ function feedLine(st, line) {
       }
       return;
     }
-    if (e.isMeta) return;
+    if (e.isMeta || e.isCompactSummary) return; // sıkıştırma özeti kullanıcı mesajı değildir (yerine sıkıştırma satırı görünür)
     const t = userText(c);
     if (isNoise(t)) return;
     const um = { r: 'u', t: t.slice(0, 8000), ts: e.timestamp }; const uim = imagesOf(c); if (uim.length) um.imgs = uim;
@@ -294,9 +299,9 @@ function finishParse(st, limit) {
     skipped = st.turns - limit;
     list = list.slice(userAt[skipped]);
   }
-  const msgs = list.filter(m => m.r === 'u' || m.b.length)
+  const msgs = list.filter(m => m.r !== 'a' || m.b.length)
     .map(m => m.r === 'a' ? { ...m, b: m.b.map(b => { if (b.t !== 'tool') return b; const { id, ...rest } = b; return rest; }) } : m);
-  return { msgs, skipped, turns: st.turns, outputs: [...st.outputs.values()].reverse() };
+  return { msgs, skipped, turns: st.turns, outputs: [...st.outputs.values()].reverse(), stats: tally.summary(st.tally) };
 }
 
 /**

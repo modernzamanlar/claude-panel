@@ -2,6 +2,7 @@
 // Testler için sahte `claude` CLI: stream-json olaylarını ve izin (control_request) protokolünü
 // gerçek CLI'ye benzer sırayla üretir. Ortam değişkenleri:
 //   FAKE_DELAY=ms  FAKE_PERM=1 (Bash için izin ister)  FAKE_ASK=1 (AskUserQuestion)  FAKE_AUTH_FAIL=1  FAKE_LOGGED_OUT=1
+//   FAKE_AUTOCOMPACT=1 (tur ortasında otomatik sıkıştırma). "/compact" mesajı elle sıkıştırma olaylarını üretir.
 const crypto = require('crypto');
 const args = process.argv.slice(2);
 if (args[0] === 'auth' && args[1] === 'status') { console.log(JSON.stringify({ loggedIn: process.env.FAKE_LOGGED_OUT ? false : true, authMethod: 'fake' })); process.exit(0); }
@@ -43,7 +44,11 @@ function ask(tool_name, input) {
   out({ type: 'control_request', request_id, request: { subtype: 'can_use_tool', tool_name, input, description: input.description || '', permission_suggestions: [{ type: 'addRules', rules: [{ toolName: tool_name, ruleContent: input.command || '' }], behavior: 'allow', destination: 'localSettings' }] } });
   return new Promise(r => waiters.set(request_id, r));
 }
-function finish(result, extra = {}) { out({ type: 'result', subtype: 'success', is_error: false, result, total_cost_usd: 0.0123, session_id: sid, args, modelUsage: { 'claude-opus-5-5': { inputTokens: 5, outputTokens: 20, cacheReadInputTokens: 42000, contextWindow: 1000000, maxOutputTokens: 64000 }, 'claude-haiku-4-5-20251001': { inputTokens: 300, outputTokens: 10, contextWindow: 200000 } }, ...extra }); }
+// Gerçek CLI (2.1.318) gibi: hızlı mod yalnızca --fast-mode on ile istenir; bu hesapta ek kullanım kapalı olduğundan kapalı kalır
+const fast = () => (arg('--fast-mode') === 'on' ? { fast_mode_state: 'off', fast_mode_disabled_reason: 'extra_usage_disabled' } : { fast_mode_state: 'off', fast_mode_disabled_reason: 'sdk_opt_in_required' });
+// compact_boundary: akışta compact_metadata (snake_case) taşır
+const compactBoundary = (trigger, pre, post) => out({ type: 'system', subtype: 'compact_boundary', session_id: sid, uuid: crypto.randomUUID(), compact_metadata: { trigger, pre_tokens: pre, post_tokens: post, duration_ms: 1200 } });
+function finish(result, extra = {}) { out({ type: 'result', subtype: 'success', is_error: false, result, total_cost_usd: 0.0123, session_id: sid, args, ...fast(), modelUsage: { 'claude-opus-5-5': { inputTokens: 5, outputTokens: 20, cacheReadInputTokens: 42000, contextWindow: 1000000, maxOutputTokens: 64000 }, 'claude-haiku-4-5-20251001': { inputTokens: 300, outputTokens: 10, contextWindow: 200000 } }, ...extra }); }
 
 async function turn(msg) {
   const content = msg.message.content;
@@ -55,10 +60,22 @@ async function turn(msg) {
     out({ type: 'result', subtype: 'success', is_error: true, result: 'Failed to authenticate', terminal_reason: 'api_error', session_id: sid });
     return process.exit(1);
   }
+  if (text.trim() === '/compact') { // elle sıkıştırma: model yanıtı yok, num_turns 0, maliyet sayacı birikimli
+    out({ type: 'system', subtype: 'status', status: 'compacting', session_id: sid });
+    await wait(delay * 2);
+    out({ type: 'system', subtype: 'status', status: null, compact_result: 'success', session_id: sid });
+    compactBoundary('manual', 42025, 9100);
+    out({ type: 'user', session_id: sid, isReplay: true, message: { role: 'user', content: '<local-command-stdout>Compacted </local-command-stdout>' } });
+    finish('', { num_turns: 0, total_cost_usd: 0.0151, usage: { input_tokens: 0, output_tokens: 0, cache_read_input_tokens: 0, cache_creation_input_tokens: 0 } });
+    return;
+  }
   const reply = `Aldım: "${text.split('\n')[0]}"${images ? ` (+${images} görsel)` : ''}. Panelden yazıyorum.`;
   out({ type: 'stream_event', session_id: sid, event: { type: 'content_block_start', index: 0, content_block: { type: 'text', text: '' } } });
   for (const part of reply.match(/.{1,6}/g)) { out({ type: 'stream_event', session_id: sid, event: { type: 'content_block_delta', index: 0, delta: { type: 'text_delta', text: part } } }); await wait(delay / 4); }
-  out({ type: 'assistant', session_id: sid, message: { model: 'claude-opus-5-5', content: [{ type: 'text', text: reply }], usage: { input_tokens: 5, cache_read_input_tokens: 42000, output_tokens: 20 } } });
+  // Gerçek CLI gibi aynı mesaj kimliği her içerik bloğunda tekrarlanır (usage da): toplamda bir kez sayılmalı
+  const mid = 'msg_' + crypto.randomUUID().slice(0, 8);
+  out({ type: 'assistant', session_id: sid, message: { id: mid, model: 'claude-opus-5-5', content: [{ type: 'text', text: reply }], usage: { input_tokens: 5, cache_read_input_tokens: 42000, output_tokens: 20 } } });
+  if (process.env.FAKE_AUTOCOMPACT) { out({ type: 'system', subtype: 'status', status: 'compacting', session_id: sid }); await wait(delay); compactBoundary('auto', 168000, 21000); }
   // Gerçek CLI her turda kalan kullanımı bildirir
   out({ type: 'rate_limit_event', session_id: sid, rate_limit_info: { status: 'allowed', resetsAt: Math.floor(Date.now() / 1000) + 3 * 86400, rateLimitType: 'seven_day', unifiedWindows: { seven_day: { utilization: 0.73, resetsAt: Math.floor(Date.now() / 1000) + 3 * 86400 }, five_hour: { utilization: 0.2, resetsAt: Math.floor(Date.now() / 1000) + 7200 } } } });
   await wait(delay);
