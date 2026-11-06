@@ -6,6 +6,7 @@ contextBridge.exposeInMainWorld('api', {
     list: () => ipcRenderer.invoke('sessions:list'),
     refresh: () => ipcRenderer.invoke('sessions:refresh'),
     load: (id, limit) => ipcRenderer.invoke('session:load', id, limit),
+    subagent: (id, toolId, agentId) => ipcRenderer.invoke('session:subagent', id, toolId, agentId),
     onChanged: cb => {
       const h = (_e, payload) => cb(payload);
       ipcRenderer.on('sessions:changed', h);
@@ -51,6 +52,7 @@ contextBridge.exposeInMainWorld('api', {
   run: {
     start: opts => ipcRenderer.invoke('run:start', opts),
     stop: runId => ipcRenderer.invoke('run:stop', runId),
+    stopTask: (runId, taskId) => ipcRenderer.invoke('run:stopTask', runId, taskId),
     respond: (runId, requestId, response) => ipcRenderer.invoke('run:respond', runId, requestId, response),
     active: () => ipcRenderer.invoke('run:active'),
     onEvent: cb => {

@@ -6,7 +6,7 @@ protocol.registerSchemesAsPrivileged([{ scheme: 'cpmedia', privileges: { standar
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
-const { SessionIndex, SessionLoader, PROJECTS_DIR } = require('./sessions');
+const { SessionIndex, SessionLoader, PROJECTS_DIR, loadSubagent } = require('./sessions');
 const workspace = require('./workspace');
 const { createMirror } = require('./mirror');
 const { createUpdater } = require('./updater');
@@ -111,6 +111,8 @@ ipcMain.handle('session:load', async (_e, id, limit) => {
   if (!file) throw new Error('Oturum bulunamadı: ' + id);
   return loader.load(file, limit || 60); // artımlı: açık oturum büyüdükçe yalnızca yeni satırlar okunur
 });
+// Alt ajanın kaydı (blok açılınca): oturum dizinden bulunur, kimlikler sessions.loadSubagent'ta doğrulanır
+ipcMain.handle('session:subagent', (_e, id, toolId, agentId) => { const file = sessionFile(id); return file ? loadSubagent(file, toolId, agentId) : null; });
 ipcMain.handle('workspace:load', () => {
   const ws = workspace.load([() => mirror.readWorkspace()]); // asıl dosya ve yedek yoksa yansıdaki yapıdan dön
   if (!ws.firstRun) mirror.schedule(ws);
@@ -195,6 +197,7 @@ ipcMain.handle('claude:connectors', async () => {
 });
 ipcMain.handle('run:start', (_e, opts) => runner.start(opts));
 ipcMain.handle('run:stop', (_e, runId) => runner.stop(runId));
+ipcMain.handle('run:stopTask', (_e, runId, taskId) => runner.stopTask(runId, taskId));
 ipcMain.handle('run:respond', (_e, runId, requestId, response) => runner.respond(runId, requestId, response));
 ipcMain.handle('claude:remote', (_e, opts) => openRemoteTerminal(shell, opts));
 ipcMain.handle('claude:mcpList', (_e, cwd) => mcpList(cwd));
