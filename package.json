@@ -8,7 +8,7 @@
     "start": "electron .",
     "selftest": "electron . --selftest",
     "test": "node scripts/test.js",
-    "test:ui": "scripts/ui-test/run.sh mac && scripts/ui-test/run.sh win",
+    "test:ui": "node scripts/ui-test/run.js mac && node scripts/ui-test/run.js win",
     "dist": "electron-builder --mac dmg zip",
     "icon": "electron build/make-icon.js",
     "dist:win": "electron-builder --win nsis --x64",

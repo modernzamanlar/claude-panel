@@ -10,6 +10,11 @@ const { execFileSync } = require('child_process');
 
 const FAKE = path.join(__dirname, 'fake-claude.js');
 process.env.CLAUDE_PANEL_CLAUDE_BIN = FAKE;
+const WIN = process.platform === 'win32';
+// Geçici ev klasörü (modül yüklenmeden önce): loginEnv PATH'e ~/.local/bin ekler; gerçek evdeki claude
+// (Windows'ta ~/.local/bin/claude.exe) "claude yok" testlerinde bulunup gerçek CLI çalıştırılmasın.
+const FAKE_HOME = fs.mkdtempSync(path.join(os.tmpdir(), 'qr-ev-'));
+process.env.HOME = FAKE_HOME; process.env.USERPROFILE = FAKE_HOME; // os.homedir(): POSIX HOME, Windows USERPROFILE
 const R = require('../src/main/runner');
 const { Runner, authStatus, openLoginTerminal, openRemoteTerminal, mcpList, claudeBin, loginEnv, launchSpec, controlStatus, installDesktop, desktopMcp, _test } = R;
 const { deps } = _test;
@@ -28,7 +33,11 @@ _test.reset(''); // giriş kabuğu PATH'i: testlerde boş (gerçek kabuk çalı�
 
 const made = [];
 const tmp = (name = 'qr-') => { const d = fs.mkdtempSync(path.join(os.tmpdir(), name)); made.push(d); return d; };
-after(() => { for (const d of made) fs.rmSync(d, { recursive: true, force: true }); });
+after(() => { for (const d of [...made, FAKE_HOME]) fs.rmSync(d, { recursive: true, force: true }); });
+// macOS kipi Windows'ta: PATH ':' ile bölünür, sürücü harfli yol ("C:\…") parçalanır; zsh/izin bitleri yok
+const POSIX_ONLY = WIN && 'yalnız POSIX: ":" ayraçlı PATH, izin bitleri ya da /bin/zsh gerekir';
+// cli.js'in klasörlerini de kurar (Mac'te CLI_REL ters bölülerle tek dosya adıdır, klasör oluşmaz)
+const writeCli = dir => { const f = path.join(dir, CLI_REL); fs.mkdirSync(path.dirname(f), { recursive: true }); fs.writeFileSync(f, ''); };
 const exe = (f, body = '') => { fs.writeFileSync(f, body); fs.chmodSync(f, 0o755); return f; };
 const fakeShell = () => { const opened = []; return { opened, openPath: async p => { opened.push(p); return ''; } }; };
 // Windows kipi: giriş kabuğu yok, PATH yalnızca verilen klasörler; ekler (APPDATA…) kapalı
@@ -97,7 +106,7 @@ test('safeLabel: metakarakterler ve satır sonları boşluğa döner, uzunluk s�
 
 // ================= loginEnv / loginPath =================
 test('loginEnv: giriş kabuğunun PATH\'i bir kez okunur ve önbellekte tutulur', async () => {
-  _test.reset();
+  _test.reset(); deps.platform = 'darwin';
   const calls = [];
   deps.execFile = (file, args, o, cb) => { calls.push({ file, args, o }); cb(null, '/l1:/l2'); };
   process.env.SHELL = '/bin/kabuk-test';
@@ -110,7 +119,7 @@ test('loginEnv: giriş kabuğunun PATH\'i bir kez okunur ve önbellekte tutulur'
 });
 
 test('loginEnv: SHELL yoksa /bin/zsh denenir; hata olursa giriş PATH\'i boş sayılır ve yine önbelleğe alınır', async () => {
-  _test.reset();
+  _test.reset(); deps.platform = 'darwin';
   const calls = [];
   deps.execFile = (file, args, o, cb) => { calls.push(file); cb(new Error('zaman aşımı'), '/bozuk'); };
   delete process.env.SHELL;
@@ -124,7 +133,7 @@ test('loginEnv: SHELL yoksa /bin/zsh denenir; hata olursa giriş PATH\'i boş sa
 });
 
 test('loginEnv: oturum değişkenleri ayıklanır, PATH tekilleşir, sıra korunur', async () => {
-  _test.reset('/l1:/dup::');
+  _test.reset('/l1:/dup::'); deps.platform = 'darwin';
   Object.assign(process.env, { CLAUDECODE: '1', CLAUDE_CODE_X: '1', CLAUDE_AGENT_SDK_Y: '1', CLAUDE_PID: '1', CLAUDE_EFFORT: '1', CLAUDE_PREVIEW_Z: '1', ELECTRON_RUN_AS_NODE: '1', CLAUDECODEX: 'kalır', CLAUDE_PIDX: 'kalır', ELECTRON_RUN_AS_NODEX: 'kalır', KALSIN: 'evet' });
   process.env.PATH = '/dup:/p2:/opt/homebrew/bin';
   const env = await loginEnv();
@@ -163,11 +172,13 @@ test('claudeBin: ortam değişkeni verilmişse aranmadan o döner', async () => 
 test('claudeBin: PATH\'teki ilk çalıştırılabilir dosya bulunur; klasör ve izinsiz dosya atlanır', async () => {
   delete process.env.CLAUDE_PANEL_CLAUDE_BIN;
   const a = tmp(), b = tmp(), c = tmp(), d = tmp();
-  fs.mkdirSync(path.join(a, 'claude'));
-  fs.writeFileSync(path.join(b, 'claude'), ''); fs.chmodSync(path.join(b, 'claude'), 0o644);
-  exe(path.join(c, 'claude')); exe(path.join(d, 'claude'));
-  _test.reset([a, b, c, d].join(':'));
-  assert.equal(await claudeBin(), path.join(c, 'claude'));
+  const name = WIN ? 'claude.exe' : 'claude';
+  fs.mkdirSync(path.join(a, name));
+  // izinsiz dosya yalnız POSIX'te anlamlı (Windows'ta X_OK yalnızca varlığı denetler)
+  if (!WIN) { fs.writeFileSync(path.join(b, 'claude'), ''); fs.chmodSync(path.join(b, 'claude'), 0o644); }
+  exe(path.join(c, name)); exe(path.join(d, name));
+  if (WIN) winMode([a, b, c, d]); else _test.reset([a, b, c, d].join(':'));
+  assert.equal(await claudeBin(), path.join(c, name));
 });
 
 test('claudeBin (Windows): claude.exe claude.cmd\'den önce gelir; ikisi de yoksa null', async () => {
@@ -187,6 +198,7 @@ const NPM_SHIM = '@ECHO off\r\nGOTO start\r\n:find_dp0\r\nSET dp0=%~dp0\r\nEXIT 
 const CLI_REL = 'node_modules\\@anthropic-ai\\claude-code\\cli.js'; // Mac'te tek dosya adı olarak oluşturulur
 
 test('launchSpec: Windows dışında ya da .cmd/.bat olmayan dosya doğrudan başlatılır', () => {
+  deps.platform = 'darwin';
   assert.deepEqual(launchSpec('/x/claude.cmd', {}), { file: '/x/claude.cmd', pre: [], shell: false });
   deps.platform = 'win32';
   assert.deepEqual(launchSpec('C:\\x\\claude.exe', {}), { file: 'C:\\x\\claude.exe', pre: [], shell: false });
@@ -198,7 +210,7 @@ test('launchSpec: npm cmd-shim çözülür — yerel node.exe + cli.js, sonuç �
   const dir = tmp(), other = tmp();
   const bin = path.join(dir, 'claude.cmd');
   fs.writeFileSync(bin, NPM_SHIM);
-  fs.writeFileSync(path.join(dir, 'node.exe'), ''); fs.writeFileSync(path.join(dir, CLI_REL), '');
+  fs.writeFileSync(path.join(dir, 'node.exe'), ''); writeCli(dir);
   fs.writeFileSync(path.join(other, 'node.exe'), '');
   const spec = launchSpec(bin, { PATH: other });
   assert.deepEqual(spec, { file: path.join(dir, 'node.exe'), pre: [path.join(dir, CLI_REL)], shell: false });
@@ -210,7 +222,7 @@ test('launchSpec: yerel node.exe yoksa PATH\'teki ilk node.exe kullanılır', ()
   deps.platform = 'win32';
   const dir = tmp(), n0 = tmp(), n1 = tmp(), n2 = tmp();
   const bin = path.join(dir, 'claude.cmd');
-  fs.writeFileSync(bin, NPM_SHIM); fs.writeFileSync(path.join(dir, CLI_REL), '');
+  fs.writeFileSync(bin, NPM_SHIM); writeCli(dir);
   fs.writeFileSync(path.join(n1, 'node.exe'), ''); fs.writeFileSync(path.join(n2, 'node.exe'), '');
   assert.deepEqual(launchSpec(bin, { PATH: [n0, n1, n2].join(';') }), { file: path.join(n1, 'node.exe'), pre: [path.join(dir, CLI_REL)], shell: false });
 });
@@ -219,7 +231,7 @@ test('launchSpec: node.exe hiç bulunamazsa (PATH yoksa da) kabuğa düşülür'
   deps.platform = 'win32';
   const dir = tmp();
   const bin = path.join(dir, 'claude.cmd');
-  fs.writeFileSync(bin, NPM_SHIM); fs.writeFileSync(path.join(dir, CLI_REL), '');
+  fs.writeFileSync(bin, NPM_SHIM); writeCli(dir);
   assert.deepEqual(launchSpec(bin, {}), { file: bin, pre: [], shell: true });
 });
 
@@ -270,7 +282,7 @@ test('start (Windows kabuk yolu): güvenli olmayan claude yolu reddedilir, süre
 test('start (Windows cmd-shim): node.exe + cli.js kabuksuz başlatılır', async () => {
   const dir = tmp();
   const bin = path.join(dir, 'claude.cmd');
-  fs.writeFileSync(bin, NPM_SHIM); fs.writeFileSync(path.join(dir, 'node.exe'), ''); fs.writeFileSync(path.join(dir, CLI_REL), '');
+  fs.writeFileSync(bin, NPM_SHIM); fs.writeFileSync(path.join(dir, 'node.exe'), ''); writeCli(dir);
   winMode(); process.env.CLAUDE_PANEL_CLAUDE_BIN = bin;
   const { calls } = fakeSpawn(); const { runner } = collect();
   await runner.start({ sessionId: ID, cwd: tmp(), text: 'x' });
@@ -317,7 +329,7 @@ test('bilgisayar kontrolü: açıkken --chrome ve agent-desktop MCP yapılandır
   assert.deepEqual(await controlStatus(), { desktop: null, platform: process.platform, access: null });
 });
 
-test('bilgisayar kontrolü: agent-desktop PATH\'te aranır; Windows\'ta npm betiği (.cmd) cmd /c ile, .exe doğrudan başlatılır', async () => {
+test('bilgisayar kontrolü (macOS): agent-desktop PATH\'te aranır, erişilebilirlik izni okunur', { skip: POSIX_ONLY }, async () => {
   delete process.env.CLAUDE_PANEL_DESKTOP_BIN;
   const d = tmp();
   exe(path.join(d, 'agent-desktop'));
@@ -331,6 +343,10 @@ test('bilgisayar kontrolü: agent-desktop PATH\'te aranır; Windows\'ta npm beti
   assert.strictEqual((await controlStatus()).access, null, 'okunamayan durum: bilinmiyor');
   deps.execFile = (f, a, o, cb) => cb(null, '{"data":{"permissions":{"accessibility":{}}}}');
   assert.strictEqual((await controlStatus()).access, null);
+});
+
+test('bilgisayar kontrolü (Windows): agent-desktop .cmd ise cmd /c ile, .exe doğrudan başlatılır; izin denetimi yok', async () => {
+  delete process.env.CLAUDE_PANEL_DESKTOP_BIN;
   const w = tmp(); exe(path.join(w, 'agent-desktop.cmd'));
   winMode([w]); _test.reset('');
   deps.execFile = () => assert.fail('Windows\'ta izin denetimi yok');
@@ -344,8 +360,7 @@ test('bilgisayar kontrolü: agent-desktop PATH\'te aranır; Windows\'ta npm beti
   assert.strictEqual((await controlStatus()).desktop, null);
 });
 
-test('agent-desktop kurulumu: npm sabit argümanlarla çalışır (Windows\'ta tırnaklı yol + kabuk); sonra durum döner', async () => {
-  // Mac
+test('agent-desktop kurulumu (macOS): npm sabit argümanlarla kabuksuz çalışır; sonra durum döner', { skip: POSIX_ONLY }, async () => {
   const d = tmp(); const npm = exe(path.join(d, 'npm'));
   process.env.PATH = d; _test.reset(d); deps.platform = 'darwin';
   process.env.CLAUDE_PANEL_DESKTOP_BIN = '/kuruldu/agent-desktop';
@@ -354,6 +369,12 @@ test('agent-desktop kurulumu: npm sabit argümanlarla çalışır (Windows\'ta t
   assert.deepEqual(await installDesktop(), { desktop: '/kuruldu/agent-desktop', platform: 'darwin', access: 'granted' });
   assert.equal(calls[0].f, npm); assert.deepEqual(calls[0].a, ['install', '-g', 'agent-desktop']);
   assert.equal(calls[0].o.timeout, 300000); assert.equal(calls[0].o.shell, undefined);
+});
+
+test('agent-desktop kurulumu (Windows): npm.cmd tırnaklı yol + kabukla çalışır; hata ve npm yok durumları', async () => {
+  process.env.CLAUDE_PANEL_DESKTOP_BIN = '/kuruldu/agent-desktop';
+  const calls = [];
+  deps.execFile = (f, a, o, cb) => { calls.push({ f, a, o }); cb(null, ''); };
   // Windows: npm Program Files\nodejs içinde (boşluklu yol)
   const pf = path.join(tmp(), 'Program Files'); fs.mkdirSync(path.join(pf, 'nodejs'), { recursive: true });
   const wnpm = exe(path.join(pf, 'nodejs', 'npm.cmd'));
@@ -427,8 +448,10 @@ test('start: geçersiz girdiler açık hatayla reddedilir ve süreç başlamaz',
   await assert.rejects(runner.start({ sessionId: ID, text: 'x' }), /^Error: Çalışma klasörü bulunamadı: undefined$/);
   const f = path.join(cwd, 'dosya'); fs.writeFileSync(f, '');
   await assert.rejects(runner.start({ sessionId: ID, cwd: f }), new RegExp('^Error: Çalışma klasörü bulunamadı: '));
-  const nl = path.join(cwd, 'satır\nsonu'); fs.mkdirSync(nl);
-  await assert.rejects(runner.start({ sessionId: ID, cwd: nl }), /^Error: Çalışma klasörü geçersiz$/);
+  const nl = path.join(cwd, 'satır\nsonu');
+  // Windows'ta adında satır sonu olan klasör oluşturulamaz: yol yine reddedilir (bulunamadı)
+  if (WIN) await assert.rejects(runner.start({ sessionId: ID, cwd: nl }), /^Error: Çalışma klasörü bulunamadı: /);
+  else { fs.mkdirSync(nl); await assert.rejects(runner.start({ sessionId: ID, cwd: nl }), /^Error: Çalışma klasörü geçersiz$/); }
   await assert.rejects(runner.start({ sessionId: ID, cwd: cwd + '\0' }), /^Error: Çalışma klasörü bulunamadı: /);
   await assert.rejects(openRemoteTerminal(fakeShell(), { cwd }), /^Error: Geçersiz oturum kimliği$/);
   await assert.rejects(runner.start({ sessionId: 'abc', cwd }), /^Error: Geçersiz oturum kimliği$/);
@@ -592,6 +615,7 @@ test('süreç hatası exit olayına dönüşür; ardından gelen close ikinci ex
 // ================= durdurma =================
 test('stop: bekleyen izinler reddedilir, kesme isteği gider; zamanlayıcılar SIGINT → SIGTERM → SIGKILL gönderir', async t => {
   t.mock.timers.enable({ apis: ['setTimeout'] });
+  deps.platform = 'darwin'; // proc.kill yolu; Windows'ta taskkill gerçek bir pid'e gitmesin
   const { runner, evs, proc } = await started();
   assert.equal(runner.stop('yok'), false);
   for (const id of ['r1', 'r2']) proc.line({ type: 'control_request', request_id: id, request: { subtype: 'can_use_tool' } });
@@ -625,6 +649,7 @@ test('stop: süreç zamanında biterse bekleyen sinyal zamanlayıcıları iptal 
 
 test('stop: kill hata fırlatsa da zamanlayıcı çökmez ve sıradaki sinyal denenir', async t => {
   t.mock.timers.enable({ apis: ['setTimeout'] });
+  deps.platform = 'darwin';
   const { runner, proc } = await started();
   const tried = [];
   proc.kill = sig => { tried.push(sig); throw new Error('ESRCH'); };
@@ -707,7 +732,7 @@ test('authStatus (Windows kabuk yolu): execFile shell:true ve tırnaklı yol ile
 // Argümanlarını ve çalışma klasörünü $OUT dosyasına yazan sahte claude
 function recorderBin(dir) { return exe(path.join(dir, 'claude'), '#!/bin/sh\n{ pwd; for a in "$@"; do printf "[%s]\\n" "$a"; done; } > "$OUT"\n'); }
 
-test('giriş betiği (macOS): tırnaklı yol kaçışlanır, betik gerçekten çalışır ve yalnızca kullanıcı erişebilir', async () => {
+test('giriş betiği (macOS): tırnaklı yol kaçışlanır, betik gerçekten çalışır ve yalnızca kullanıcı erişebilir', { skip: POSIX_ONLY }, async () => {
   const bdir = tmp("qr it's \"x\" "); const bin = recorderBin(bdir);
   process.env.CLAUDE_PANEL_CLAUDE_BIN = bin;
   const sh = fakeShell();
@@ -724,7 +749,7 @@ test('giriş betiği (macOS): tırnaklı yol kaçışlanır, betik gerçekten ç
 });
 
 test('giriş betiği (macOS): claude bulunamazsa "claude" adıyla yazılır', async () => {
-  delete process.env.CLAUDE_PANEL_CLAUDE_BIN;
+  delete process.env.CLAUDE_PANEL_CLAUDE_BIN; deps.platform = 'darwin';
   const acc = fs.accessSync; fs.accessSync = () => { throw new Error('EACCES'); };
   const sh = fakeShell();
   try { await openLoginTerminal(sh); } finally { fs.accessSync = acc; }
@@ -737,7 +762,7 @@ test('giriş betiği (Windows): .cmd içeriği, izinler; güvenli olmayan yol re
   await openLoginTerminal(sh);
   const f = sh.opened[0];
   assert.equal(path.basename(f), 'claude-panel-login.cmd');
-  assert.equal(fs.statSync(f).mode & 0o777, 0o600);
+  if (!WIN) assert.equal(fs.statSync(f).mode & 0o777, 0o600); // Windows'ta POSIX izin biti yok
   assert.equal(fs.readFileSync(f, 'utf8'), '@echo off\r\nchcp 65001 >nul\r\ntitle Claude Panel - giris\r\necho Claude Panel: Claude Code girisi\r\ncall "C:\\Program Files\\claude.exe" auth login\r\necho.\r\necho Bitti - bu pencereyi kapatip Claude Panel\'e donebilirsin.\r\npause\r\n');
   process.env.CLAUDE_PANEL_CLAUDE_BIN = 'C:\\100%\\claude.exe';
   await assert.rejects(openLoginTerminal(sh), { message: 'claude yolu güvenli değil: C:\\100%\\claude.exe' });
@@ -761,7 +786,7 @@ test('geçici betik klasörü 10 dakika sonra silinir', async t => {
 });
 
 // ================= Uzaktan Kontrol =================
-test('Uzaktan Kontrol (macOS): betik doğru klasörde, doğru argümanlarla gerçekten çalışır', async () => {
+test('Uzaktan Kontrol (macOS): betik doğru klasörde, doğru argümanlarla gerçekten çalışır', { skip: POSIX_ONLY }, async () => {
   const bin = recorderBin(tmp("qr b'in "));
   process.env.CLAUDE_PANEL_CLAUDE_BIN = bin;
   const dir = fs.realpathSync(tmp("qr it's $HOME "));
@@ -777,7 +802,7 @@ test('Uzaktan Kontrol (macOS): betik doğru klasörde, doğru argümanlarla ger�
 });
 
 test('Uzaktan Kontrol (macOS): ad boşsa "Claude Panel", claude bulunamazsa "claude"', async () => {
-  delete process.env.CLAUDE_PANEL_CLAUDE_BIN;
+  delete process.env.CLAUDE_PANEL_CLAUDE_BIN; deps.platform = 'darwin';
   const acc = fs.accessSync; fs.accessSync = () => { throw new Error('EACCES'); };
   const sh = fakeShell();
   try { await openRemoteTerminal(sh, { sessionId: ID, cwd: os.tmpdir() }); } finally { fs.accessSync = acc; }
@@ -792,7 +817,7 @@ test('Uzaktan Kontrol (Windows): .cmd içeriği tam beklendiği gibi; güvenli o
   await openRemoteTerminal(sh, { sessionId: ID, cwd: dir, name: 'Proje & "x"' });
   const f = sh.opened[0];
   assert.equal(path.basename(f), 'claude-panel-remote-0f8fad5b.cmd');
-  assert.equal(fs.statSync(f).mode & 0o777, 0o600);
+  if (!WIN) assert.equal(fs.statSync(f).mode & 0o777, 0o600); // Windows'ta POSIX izin biti yok
   assert.equal(fs.readFileSync(f, 'utf8'), `@echo off\r\nchcp 65001 >nul\r\ntitle Claude Panel - Uzaktan Kontrol\r\ncd /d "${dir}" || exit /b 1\r\necho Claude Panel - Uzaktan Kontrol: Proje x\r\ncall "C:\\Program Files\\claude.exe" --resume ${ID} --remote-control "Proje x"\r\npause\r\n`);
   const bad = tmp('qr 100% ');
   await assert.rejects(openRemoteTerminal(sh, { sessionId: ID, cwd: bad, name: 'a' }), { message: 'Bu klasör adı Uzaktan Kontrol betiğinde güvenle kullanılamaz: ' + bad });
