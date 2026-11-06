@@ -2172,7 +2172,7 @@ function updateGhost(ta){
   const g = ta && ta.parentElement && ta.parentElement.querySelector('.ghost'); if(!g) return;
   const s = sess(S.panes[+ta.dataset.ta]);
   const atEnd = ta.selectionStart === ta.value.length && ta.selectionEnd === ta.value.length;
-  const sug = s && atEnd && document.activeElement === ta && !ta.disabled && ta.dataset.noghost !== ta.value ? complete.suggest(ta.value, ghostSources(s)) : null;
+  const sug = s && atEnd && document.activeElement === ta && !ta.disabled && !ta._mention && ta.dataset.noghost !== ta.value ? complete.suggest(ta.value, ghostSources(s)) : null;
   ta._sug = sug;
   if(!sug){ if(g.innerHTML) g.innerHTML = ''; return; }
   const cs = getComputedStyle(ta);
