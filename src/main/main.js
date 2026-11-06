@@ -1,5 +1,5 @@
 // Claude Panel — Electron ana süreç
-const { app, BrowserWindow, ipcMain, dialog, shell, nativeTheme, Menu, protocol, nativeImage } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, shell, nativeTheme, Menu, protocol, nativeImage, screen, desktopCapturer, globalShortcut } = require('electron');
 app.setName('Claude Panel');
 // Sohbetteki video/ses oynatıcıları yerel dosyaları cpmedia://local/<kodlanmış-yol> ile okur (ileri/geri sarma için Range desteği)
 protocol.registerSchemesAsPrivileged([{ scheme: 'cpmedia', privileges: { standard: true, secure: true, stream: true, supportFetchAPI: true } }]);
@@ -12,6 +12,7 @@ const { createMirror } = require('./mirror');
 const { createUpdater } = require('./updater');
 const { SearchIndex } = require('./search');
 const { recentMedia, okBadgeIcon, dictateCommand } = require('./media');
+const { setupScreen } = require('./screen-setup');
 const { Runner, authStatus, openLoginTerminal, openRemoteTerminal, mcpList, contextUsage, controlStatus, installDesktop, filesRewind, worktreeInfo } = require('./runner');
 
 const SELFTEST = process.argv.includes('--selftest');
@@ -70,6 +71,7 @@ function syncSearch() {
     .catch(e => console.warn('arama dizini', e.message));
 }
 const runner = new Runner((ch, payload) => { if (win && !win.isDestroyed()) win.webContents.send(ch, payload); });
+let screenCtl = null; // ekran kontrolü (Kontrol açık turlara panelin MCP sunucusu + kenar çerçevesi + Ctrl+Alt+Esc)
 
 function createWindow() {
   win = new BrowserWindow({
@@ -377,6 +379,8 @@ app.whenReady().then(() => {
   protocol.handle('cpmedia', serveMedia);
   buildMenu();
   createWindow();
+  screenCtl = setupScreen({ BrowserWindow, screen, desktopCapturer, globalShortcut, getWin: () => win, runner, logDir: workspace.DIR,
+    notify: p => { if (win && !win.isDestroyed()) win.webContents.send('screen:stopped', p); }, titleFor: id => (index.get(id) || {}).title });
   startWatcher();
   index.refresh().then(r => { mirror.setReady(); return syncSearch(r); });
   require('./sessions').pruneImages();
@@ -395,4 +399,5 @@ app.on('before-quit', e => {
     return;
   }
   runner.stopAll(); mirror.flush();
+  if (screenCtl) screenCtl.close();
 });

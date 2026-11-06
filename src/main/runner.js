@@ -101,6 +101,12 @@ function desktopAccess(bin, env) {
     try { res(JSON.parse(String(out)).data.permissions.accessibility.state || null); } catch { res(null); }
   }));
 }
+// Kontrol açıkken eklenen yönerge: araç seçme sırası. Tek satır ve cmd.exe'de anlamı olan karakterler yok (winQuote kabuk yolu).
+const CONTROL_PROMPT = 'Claude Panel bilgisayar kontrolü açık. Araç seçme sırası: 1) iş API, CLI, kod ya da dosyalarla yapılabiliyorsa onları kullan; ' +
+  '2) uygulamaya özel MCP köprüleri (ör. premiere-kopru); 3) agent-desktop (erişilebilirlik ağacı); ' +
+  '4) en son mcp__ekran__ araçları (ekran görüntüsü + fare/klavye), yalnız diğerleri yetmediğinde (özel çizilmiş arayüz, adsız düğme, timeline). ' +
+  'Ekranla çalışırken önce ekran_goruntusu al, her eylemden sonra sonucu görüntüyle doğrula, küçük öğelerde yakinlastir kullan, Claude Panel penceresine dokunma. ' +
+  'Kullanıcı Ctrl+Alt+Esc ile ekran kontrolünü durdurabilir; durdurulursa ekranı kullanmaya devam etme.';
 async function controlStatus() {
   const env = await loginEnv();
   const bin = await desktopTool(env);
@@ -293,20 +299,28 @@ class Runner {
     // hızlı mod "sdk_opt_in_required" nedeniyle kapalı kalır (CLI 2.1.318'de denendi). Kullanılabilirliği hesap belirler;
     // sonuç result.fast_mode_state / fast_mode_disabled_reason ile döner. Kapalıyken bayrak verilmez (CLI varsayılanı).
     if (opts.fast === true) args.push('--fast-mode', 'on');
-    if (opts.control) { // bilgisayar kontrolü: tarayıcı (Claude in Chrome) + varsa masaüstü (agent-desktop)
+    // Mesaj süreç başlamadan kurulur ve doğrulanır: bozuk bir ek, başlamış ama hiç mesaj almamış (asılı kalan) bir süreç bırakmasın.
+    const message = JSON.stringify({ type: 'user', message: { role: 'user', content: buildContent(opts) } }) + '\n';
+    let screenCfg = null;
+    if (opts.control) { // bilgisayar kontrolü: tarayıcı (Claude in Chrome) + varsa masaüstü (agent-desktop) + panelin ekran sunucusu
       args.push('--chrome');
       const ad = await desktopTool(env);
-      if (ad) args.push('--mcp-config', writeDesktopMcp(ad));
+      const ekran = this.screen ? await this.screen.register(runId, { sessionId, cwd }) : null;
+      if (ekran) {
+        // Taşıyıcı anahtar içerdiği için tura özel, yalnız kullanıcıya açık geçici dosya (mkdtemp + wx); tur bitince silinir
+        screenCfg = writeTempScript('kontrol.mcp.json', JSON.stringify({ mcpServers: { ...(ad ? desktopMcp(ad).mcpServers : {}), ekran } }, null, 1));
+        args.push('--mcp-config', screenCfg);
+      } else if (ad) args.push('--mcp-config', writeDesktopMcp(ad));
     }
     for (const d of addDirs) args.push('--add-dir', d);
     args.push('--permission-prompt-tool', 'stdio');
+    if (opts.control) args.push('--append-system-prompt', CONTROL_PROMPT);
     if (opts.ephemeral) args.push('--no-session-persistence'); // yalnızca testler: oturum dosyası yazılmaz
 
-    // Mesaj süreç başlamadan kurulur ve doğrulanır: bozuk bir ek, başlamış ama hiç mesaj almamış (asılı kalan) bir süreç bırakmasın.
-    const message = JSON.stringify({ type: 'user', message: { role: 'user', content: buildContent(opts) } }) + '\n';
-
-    const proc = spawnClaude(bin, args, { cwd, env, stdio: ['pipe', 'pipe', 'pipe'] });
-    const run = { runId, proc, sessionId, startedAt: Date.now(), stderr: '', done: false, pending: new Set(), timers: [] };
+    let proc;
+    try { proc = spawnClaude(bin, args, { cwd, env, stdio: ['pipe', 'pipe', 'pipe'] }); }
+    catch (e) { this.releaseScreen({ runId, screenCfg }); throw e; }
+    const run = { runId, proc, sessionId, startedAt: Date.now(), stderr: '', done: false, pending: new Set(), timers: [], screenCfg };
     this.runs.set(runId, run);
     this.send('run:event', { runId, type: 'started', sessionId, fork, newSession: !!opts.newSession });
 
@@ -368,8 +382,14 @@ class Runner {
     if (run.done) return; run.done = true;
     for (const t of run.timers) clearTimeout(t); // durdurma zamanlayıcıları süreç bitince beklemesin
     this.runs.delete(run.runId);
+    this.releaseScreen(run);
     const stopped = !!run.stopRequested;
     this.send('run:event', { runId: run.runId, type: 'exit', sessionId: run.sessionId, stopped, ...info, stderr: info.code ? run.stderr : '' });
+  }
+  /** Ekran sunucusundaki tur kaydını kaldırır (yol anahtarı geçersiz, çerçeve söner) ve anahtarlı yapılandırmayı siler. */
+  releaseScreen(run) {
+    if (this.screen) try { this.screen.release(run.runId); } catch {}
+    if (run.screenCfg) fs.rm(path.dirname(run.screenCfg), { recursive: true, force: true }, () => {});
   }
   stop(runId) {
     const run = this.runs.get(runId);
@@ -507,5 +527,5 @@ async function worktreeInfo(dir, name) {
 }
 
 // Testler için: bağımlılıklar ve önbellek sıfırlama
-const _test = { deps, winQuote, safeLabel, expand, reset(lp = null) { loginPathCache = lp; launchCache.clear(); } };
+const _test = { deps, CONTROL_PROMPT, winQuote, safeLabel, expand, reset(lp = null) { loginPathCache = lp; launchCache.clear(); } };
 module.exports = { Runner, authStatus, openLoginTerminal, openRemoteTerminal, mcpList, contextUsage, filesRewind, worktreeInfo, claudeBin, loginEnv, launchSpec, controlStatus, installDesktop, desktopMcp, _test };
