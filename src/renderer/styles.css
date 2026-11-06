@@ -814,10 +814,10 @@ img.dog8{image-rendering:pixelated;image-rendering:crisp-edges;display:block}
 .cx-fd{font:11px var(--mono);color:var(--faint);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;direction:rtl;text-align:left}
 .cx-tags{display:flex;flex-wrap:wrap;gap:4px;margin-top:2px}
 .cx-tag{font-size:10.5px;padding:0 6px;border-radius:5px;border:1px solid var(--line2);color:var(--muted);white-space:nowrap}
-.cx-tag.cx-new{color:var(--ok);border-color:color-mix(in srgb,var(--ok) 45%,transparent)}
-.cx-tag.cx-warn{color:var(--warn);border-color:color-mix(in srgb,var(--warn) 50%,transparent)}
-.cx-tag.cx-side{color:var(--live);border-color:color-mix(in srgb,var(--live) 45%,transparent)}
-.cx-tag.cx-dim{color:var(--faint)}
+.cx-tag.cx-t-new{color:var(--ok);border-color:color-mix(in srgb,var(--ok) 45%,transparent)}
+.cx-tag.cx-t-warn{color:var(--warn);border-color:color-mix(in srgb,var(--warn) 50%,transparent)}
+.cx-tag.cx-t-side{color:var(--live);border-color:color-mix(in srgb,var(--live) 45%,transparent)}
+.cx-tag.cx-t-dim{color:var(--faint)}
 .cx-dh{display:flex;align-items:flex-start;gap:10px;margin-bottom:8px}
 .cx-dp{flex:1;min-width:0;display:flex;flex-wrap:wrap;align-items:center;gap:6px}
 .cx-dp b{font-size:14px;font-weight:600}

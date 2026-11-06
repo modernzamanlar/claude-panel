@@ -1227,7 +1227,7 @@ document.addEventListener('click', e => {
     if(d.m==='cut'){ FX.clip = [...FX.sel]; renderBoard(); toast(`${FX.clip.length} öğe kesildi · hedef klasörde ⌘V`); }
     if(d.m==='withsel'){ closeMenu(); openNewFolder(curFolder(), [...FX.sel]); return; }
     if(d.m==='ql'){ closeMenu(); quickLook(d.id); return; }
-    if(d.m==='changes'){ closeMenu(); changesUI.open(d.id, (sess(d.id) || {}).title); return; } // oturumun toplu farkı (changes-ui.js)
+    if(d.m==='changes'){ closeMenu(); const cs = sess(d.id); if(cs) changesUI.open(cs.uuid, cs.title); return; } // oturumun toplu farkı (changes-ui.js)
     if(d.m==='bgchat'){ closeMenu(); newChat(d.f ? {group:d.f} : {}); return; }
     if(d.m==='bgfolder'){ closeMenu(); openNewFolder(d.f || null); return; }
     if(d.m==='bgpaste'){ closeMenu(); const c = FX.clip; FX.clip = null; if(c) moveInto(c, FX.cwd); return; }
@@ -1357,7 +1357,7 @@ document.addEventListener('click', e => {
   const mc = t.closest('[data-mic]'); if(mc){ dictate(+mc.dataset.mic); return; }
   const tp = t.closest('[data-tpl]'); if(tp){ const r = tp.getBoundingClientRect(); tplMenu(+tp.dataset.tpl, r.left, r.top - 60 - templates().length * 32); return; }
   const swp = t.closest('[data-swap]'); if(swp){ S.active = +swp.dataset.swap; SR.q = ''; const sq = $('#sq'); if(sq) sq.value = ''; renderRail(); setSearch(true); return; }
-  const cxo = t.closest('[data-cxopen]'); if(cxo){ changesUI.open(cxo.dataset.cxopen, (sess(cxo.dataset.cxopen) || {}).title); return; }
+  const cxo = t.closest('[data-cxopen]'); if(cxo){ const cs = sess(cxo.dataset.cxopen); if(cs) changesUI.open(cs.uuid, cs.title); return; }
   const mo = t.closest('[data-more]'); if(mo){ const r = mo.getBoundingClientRect(); sessMenu(mo.dataset.more, r.left-160, r.bottom+4); return; }
   if(t.closest('[data-watch]')){ toast('Salt okuma modunda canlı izleniyor'); return; }
   const fk = t.closest('[data-fork]'); if(fk){

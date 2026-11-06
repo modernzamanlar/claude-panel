@@ -22,7 +22,7 @@
     return { html: `<div class="dv">${rows.join('')}</div>`, n };
   }
   const badge = (a, r, approx) => `<span class="dv-n">${a ? `<span class="dv-pa">+${a}</span>` : ''}${r ? `<span class="dv-pd">−${r}</span>` : ''}${!a && !r ? '<span class="cx-z">0</span>' : ''}${approx ? '<span class="cx-z" title="Kesin ilk hal kurulamadı; sayılar adım adım toplamdır">~</span>' : ''}</span>`;
-  const tagHTML = tags => tags.map(t => `<span class="cx-tag cx-${t.k}">${esc(t.t)}</span>`).join('');
+  const tagHTML = tags => tags.map(t => `<span class="cx-tag cx-t-${t.k}">${esc(t.t)}</span>`).join('');
 
   function listHTML() {
     if (X.err) return `<div class="cx-err">${esc(X.err)}</div>`;
@@ -108,7 +108,7 @@
   async function load(selPath) {
     const sid = X.sid;
     try {
-      const files = await window.api.changes.list(sid);
+      const files = await X.api.list(sid);
       if (!X || X.sid !== sid) return;
       X.files = files; X.err = '';
       const i = selPath ? files.findIndex(f => f.path === selPath) : -1;
@@ -119,7 +119,7 @@
   async function loadDetail() {
     const f = X.files[X.sel]; if (!f) return;
     const sid = X.sid, p = f.path;
-    try { const d = await window.api.changes.diff(sid, p); if (X && X.sid === sid && X.files[X.sel] && X.files[X.sel].path === p) { X.detail = d; Object.assign(f, pick(d)); paint(); } }
+    try { const d = await X.api.diff(sid, p); if (X && X.sid === sid && X.files[X.sel] && X.files[X.sel].path === p) { X.detail = d; Object.assign(f, pick(d)); paint(); } }
     catch (e) { if (X && X.sid === sid) { X.detail = { path: p, err: msgOf(e) }; paint(); } }
   }
   // Fark isteği şimdiki durumu da yeniler (liste satırı ve onayda kullanılan hash güncel kalır)
@@ -130,7 +130,7 @@
     const f = X.files[X.sel]; if (!f || X.busy) return;
     X.busy = true; X.msg = ''; paint();
     try {
-      const r = await window.api.changes.revert(X.sid, f.path, { hash: f.hash, ack: !!(f.ack && X.ack) });
+      const r = await X.api.revert(X.sid, f.path, { hash: f.hash, ack: !!(f.ack && X.ack) });
       X.busy = false; X.confirm = false; X.ack = false;
       say(r.action === 'trash' ? 'Dosya Geri Dönüşüm Kutusuna taşındı' : r.action === 'none' ? 'Dosya zaten ilk halindeydi' : 'Dosya oturum başındaki haline döndürüldü' + (r.backup ? ' (yedek alındı)' : ''));
       X.lastRevert = r; X.detail = null; await load(f.path);
@@ -157,7 +157,8 @@
       if (i !== X.sel) { X.sel = i; X.detail = null; paint(); loadDetail(); }
     }
   }
-  function open(sid, title) { X = { sid, title: title || '', files: null, sel: -1, detail: null }; paint(); load(); }
+  // api: test için yerine konabilir (varsayılan ana süreç köprüsü)
+  function open(sid, title, api) { X = { sid, title: title || '', files: null, sel: -1, detail: null, api: api || window.api.changes }; paint(); load(); }
   function close() { X = null; paint(); }
 
   window.changesUI = { open, close, isOpen: () => !!X, state: () => X, diffRows };
