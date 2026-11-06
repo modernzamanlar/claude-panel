@@ -42,7 +42,7 @@
       while (x > px + (down ? 0 : 1) && y > py + (down ? 1 : 0)) { ops.push({ k: ' ', t: A[--x] }); y--; }
       if (down) ops.push({ k: '+', t: B[--y] }); else ops.push({ k: '-', t: A[--x] });
     }
-    while (x > 0 && y > 0) { ops.push({ k: ' ', t: A[--x] }); y--; }
+    // d = 0 yılanı yok: ortak baş diffOps'ta atıldı (A[0] !== B[0])
     return ops.reverse();
   }
   // Eklenen / silinen satır sayısı

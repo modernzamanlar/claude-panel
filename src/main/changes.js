@@ -246,7 +246,9 @@ function checkPath(p, { platform = process.platform, projectsDir } = {}) {
   if (projectsDir) { const rel = path.relative(projectsDir, p); if (!rel.startsWith('..') && !path.isAbsolute(rel) && /\.jsonl$/i.test(p)) throw new Error('Oturum kayıtlarına dokunulmaz.'); }
   // Sembolik bağ / junction hilesi: var olan en yakın üst klasörün gerçek yolu yazılı yolla aynı olmalı
   let probe = path.resolve(p);
-  while (!fs.existsSync(probe)) { const up = path.dirname(probe); if (up === probe) break; probe = up; }
+  // lstat: hedefi olmayan (sarkan) bağ da "var" sayılır, sonra realpath çözemeyip reddeder
+  const there = q => { try { fs.lstatSync(q); return true; } catch { return false; } };
+  while (!there(probe)) { const up = path.dirname(probe); if (up === probe) break; probe = up; }
   let real; try { real = fs.realpathSync(probe); } catch { throw new Error('Yol çözümlenemedi.'); }
   if (cmp(real) !== cmp(probe)) throw new Error('Yol sembolik bağ / junction üzerinden geçiyor; güvenlik için geri alınmaz.');
   return path.resolve(p);
