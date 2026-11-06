@@ -111,6 +111,21 @@ ipcMain.handle('session:load', async (_e, id, limit) => {
   if (!file) throw new Error('Oturum bulunamadı: ' + id);
   return loader.load(file, limit || 60); // artımlı: açık oturum büyüdükçe yalnızca yeni satırlar okunur
 });
+// Oturumun toplu farkı ve dosya bazında geri alma (main/changes.js). Yol yalnızca bu oturumun kayıtlarında geçen yollardan
+// seçilir, sonra checkPath ile doğrulanır; yazmadan önce şimdiki içerik ~/.claude-panel/geri-alinanlar/ altına yedeklenir.
+const changes = require('./changes').createChanges({ projectsDir: PROJECTS_DIR, backupDir: path.join(workspace.DIR, 'geri-alinanlar'), trash: p => shell.trashItem(p) });
+const changesFile = async id => {
+  if (typeof id !== 'string' || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) throw new Error('Geçersiz oturum kimliği.');
+  let file = sessionFile(id);
+  if (!file) { await index.refresh(); file = sessionFile(id); }
+  if (!file) throw new Error('Oturum bulunamadı: ' + id);
+  return file;
+};
+const strArg = v => { if (typeof v !== 'string' || !v) throw new Error('Geçersiz yol.'); return v; };
+ipcMain.handle('changes:list', async (_e, id) => changes.list(await changesFile(id)));
+ipcMain.handle('changes:diff', async (_e, id, p) => changes.diff(await changesFile(id), strArg(p)));
+ipcMain.handle('changes:revert', async (_e, id, p, opts) => changes.revert(await changesFile(id), strArg(p),
+  { hash: opts && typeof opts.hash === 'string' ? opts.hash : '', ack: !!(opts && opts.ack === true) }));
 ipcMain.handle('workspace:load', () => {
   const ws = workspace.load([() => mirror.readWorkspace()]); // asıl dosya ve yedek yoksa yansıdaki yapıdan dön
   if (!ws.firstRun) mirror.schedule(ws);

@@ -10,7 +10,8 @@ const readline = require('readline');
 const diffView = require('../renderer/diff'); // düzenleme araçlarının fark verisi (arayüzle aynı kod)
 
 const HOME = os.homedir();
-const PROJECTS_DIR = path.join(HOME, '.claude', 'projects');
+// CLAUDE_PANEL_PROJECTS: testte (selftest) geçici bir kayıt kökü verilebilir; gerçek ~/.claude/projects'e dokunulmaz
+const PROJECTS_DIR = process.env.CLAUDE_PANEL_PROJECTS || path.join(HOME, '.claude', 'projects');
 const HEAD_BYTES = 256 * 1024;
 const TAIL_BYTES = 768 * 1024;
 const LIVE_MS = 90 * 1000; // son 90 sn içinde yazıldıysa "başka yerde aktif"

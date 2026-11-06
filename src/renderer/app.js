@@ -990,7 +990,7 @@ function renderInfo(){
       ${!S.connOpen ? '' : `<div class="conn-list">${connRows(s, conns)}<button class="act" data-mcpcheck style="margin-top:6px;font-size:12px">${S.mcpCheck && S.mcpCheck.loading ? 'Kontrol ediliyor…' : 'Durumu şimdi kontrol et'}</button></div>`}
     </div>
     ${mediaSection(s)}
-    <div class="isec"><h4>Çıktılar</h4>
+    <div class="isec"><h4>Çıktılar <button class="act cx-open" data-cxopen="${s.id}" title="Bu sohbette değişen dosyalar, fark ve geri alma">Değişen dosyalar</button></h4>
       ${s.outputs.length ? s.outputs.map(o=>`<div class="irow">${ic(/\.html?$/.test(o)?'globe':/\.(md|txt|docx)$/.test(o)?'note':'file')}<span class="lbl" title="${esc(o)}">${esc(o.split(/[\\/]/).pop())}</span><span class="ok mono odir">${esc(/[\\/]/.test(o)?o.split(/[\\/]/).slice(0,-1).join('/'):'')}</span></div>`).join('') : '<div style="color:var(--faint);font-size:12.5px">Bu oturumda henüz dosya oluşturulmadı.</div>'}
     </div>`;
 }
@@ -1167,6 +1167,7 @@ function sessMenu(id, x, y){
     <button data-m="pin" data-id="${id}">${ic('pin')}${s.pinned?'Sabitlemeyi kaldır':'Sabitle'}</button>
     <button data-m="ext" data-id="${id}">${ic('ext')}Proje klasörünü aç</button>
     <button data-m="ql" data-id="${id}">${ic('search')}Önizle (Boşluk)</button>
+    <button data-m="changes" data-id="${id}">${ic('edit')}Değişen dosyalar</button>
     <button data-m="movedlg" data-id="${id}">${ic('folder')}Taşı…</button>
     <hr><button data-m="trash" data-id="${id}" style="color:#c0392b">${ic('trash')}Çöp Kutusuna taşı</button>`);
 }
@@ -1226,6 +1227,7 @@ document.addEventListener('click', e => {
     if(d.m==='cut'){ FX.clip = [...FX.sel]; renderBoard(); toast(`${FX.clip.length} öğe kesildi · hedef klasörde ⌘V`); }
     if(d.m==='withsel'){ closeMenu(); openNewFolder(curFolder(), [...FX.sel]); return; }
     if(d.m==='ql'){ closeMenu(); quickLook(d.id); return; }
+    if(d.m==='changes'){ closeMenu(); changesUI.open(d.id, (sess(d.id) || {}).title); return; } // oturumun toplu farkı (changes-ui.js)
     if(d.m==='bgchat'){ closeMenu(); newChat(d.f ? {group:d.f} : {}); return; }
     if(d.m==='bgfolder'){ closeMenu(); openNewFolder(d.f || null); return; }
     if(d.m==='bgpaste'){ closeMenu(); const c = FX.clip; FX.clip = null; if(c) moveInto(c, FX.cwd); return; }
@@ -1355,6 +1357,7 @@ document.addEventListener('click', e => {
   const mc = t.closest('[data-mic]'); if(mc){ dictate(+mc.dataset.mic); return; }
   const tp = t.closest('[data-tpl]'); if(tp){ const r = tp.getBoundingClientRect(); tplMenu(+tp.dataset.tpl, r.left, r.top - 60 - templates().length * 32); return; }
   const swp = t.closest('[data-swap]'); if(swp){ S.active = +swp.dataset.swap; SR.q = ''; const sq = $('#sq'); if(sq) sq.value = ''; renderRail(); setSearch(true); return; }
+  const cxo = t.closest('[data-cxopen]'); if(cxo){ changesUI.open(cxo.dataset.cxopen, (sess(cxo.dataset.cxopen) || {}).title); return; }
   const mo = t.closest('[data-more]'); if(mo){ const r = mo.getBoundingClientRect(); sessMenu(mo.dataset.more, r.left-160, r.bottom+4); return; }
   if(t.closest('[data-watch]')){ toast('Salt okuma modunda canlı izleniyor'); return; }
   const fk = t.closest('[data-fork]'); if(fk){

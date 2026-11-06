@@ -12,6 +12,11 @@ contextBridge.exposeInMainWorld('api', {
       return () => ipcRenderer.removeListener('sessions:changed', h);
     },
   },
+  changes: { // oturumun değiştirdiği dosyalar, fark ve dosya bazında geri alma
+    list: id => ipcRenderer.invoke('changes:list', id),
+    diff: (id, p) => ipcRenderer.invoke('changes:diff', id, p),
+    revert: (id, p, opts) => ipcRenderer.invoke('changes:revert', id, p, opts),
+  },
   workspace: {
     load: () => ipcRenderer.invoke('workspace:load'),
     save: data => ipcRenderer.invoke('workspace:save', data),
