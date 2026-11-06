@@ -4,14 +4,14 @@ Claude Code sohbetlerini yöneten Electron masaüstü uygulaması: klasörler, 1
 
 Asıl hedef **Windows** (ofis bilgisayarı); geliştirme ve derleme Mac'te. Sürüm sürüm ayrıntı `PLAN.md`'de (bölüm 1–21); yalnızca gerektiğinde oku.
 
-Kod GitHub'da gizli depo: `modernzamanlar/claude-panel` (dal `main`). Commit/push yalnızca kullanıcı isteyince.
+Kod GitHub'da `modernzamanlar/claude-panel` (dal `main`; depo herkese açık — kullanıcı kararı, 2026-11-06: sır, müşteri adı, iç bilgi koyma). Commit/push yalnızca kullanıcı isteyince.
 
 ## Komutlar
 ```bash
 npm start                 # geliştirme modunda aç
-npm test                  # scripts/test.js → node --test test/ kendi geçici kökünde (bitince silinir)
+npm test                  # scripts/test.js → test/*.test.js kendi geçici kökünde (bitince silinir); Windows'ta da çalışır
 npm run test:cov          # media/complete/usage/markdown kapsamı (%100 tutulur)
-npm run test:ui           # uygulama içi tam test, Mac + Windows taklidi (scripts/ui-test, sahte claude CLI); yayından önce çalıştır
+npm run test:ui           # uygulama içi tam test, Mac + Windows görünümü (scripts/ui-test/run.js + extra/*.js, sahte claude CLI); yayından önce çalıştır
 node scripts/mutate.js src/main/<modül>.js test/<a>.test.js [--only 10-50]   # mutasyon testi
 npm run icon              # build/icon-kaynak.png → build/icon.png (sonra iconutil ile icon.icns); npx electron build/make-pixel.js → 8-bit köpek
 npm run dist              # Mac dmg (dist/Claude Panel-<sürüm>-arm64.dmg)
@@ -59,24 +59,15 @@ Veri: `~/.claude/projects` yalnızca okunur. `~/.claude-panel/`: `workspace.json
 - Kullanıcı bu sohbete panelden de yazabilir (aynı klasörde ikinci ajan `sdk-cli`); büyük işten önce son `.jsonl` kayıtlarına bak.
 - Kimlik bilgisi/parola girilmez; Claude girişini kullanıcı yapar.
 
-## Yapılacaklar (sırayla; 2026-11-05'te durduruldu)
-Claude Code'da olup panelde olmayan özellikler 6 ajanla ayrı dallarda yapılıyordu. Her dal `0.2.8` (2fd1c5f) üstünde; birleştirme yapılmadı.
-| Dal (GitHub) | Durum |
-|---|---|
-| `ozellik/dosya-farki` | **Bitti**: Edit/MultiEdit/Write/NotebookEdit `+N −M` ve renkli fark (`src/renderer/diff.js`, %100 kapsam, 368 birim + 41 UI testi geçti). Birleştirmeye hazır. |
-| `ozellik/at-dosya` | YARIM: `@` ile dosya önerisi (`main/files.js`, `renderer/mention*.js`). Test edilmedi. `-p` modunun `@yol`u açıp açmadığı denenecekti. |
-| `ozellik/mesaj-duzenle` | YARIM: eski mesajı düzenleyip o noktadan yeni kopyada devam (runner `resumeAt`, sessions uuid). CLI'nin gizli `--resume-session-at` bayrağı doğrulanacaktı. |
-| `ozellik/terminal` | YARIM: alt çekmecede komut çalıştırma (`main/term.js`, `renderer/ansi.js`, `renderer/terminal.js`; node-pty yok, komut başına süreç). |
-| `ozellik/tarayici` | YARIM: sağda önizleme tarayıcısı (`main/browser.js` WebContentsView, ayrı oturum, yalnızca http/https). |
-| `ozellik/baglam` | YARIM: gerçek bağlam kullanımı (`claude -p "/context"` çıktısı, `renderer/ctxusage.js`, `test/fixtures/context-*.json`). |
-Sıradaki adımlar:
-1. Yarım dalları tamamla (her biri: %100 kapsam, `scripts/ui-test/extra/<özellik>.js` UI testi, Mac+Windows taklidi, ekran görüntüsü). Dallar `extra/` desteğinden (ceda631) önce açıldı: `main`'i içine al.
-2. Dalları `main`'e tek tek birleştir (çakışmalar çoğunlukla `app.js`, `styles.css`, `main.js`, `preload.js`, `index.html`), sonra `npm test`, `npm run test:cov` (yeni modülleri ekle), `npm run test:ui`.
-3. **Uzaktan Kontrol penceresi** (kullanıcı kararı: küçültülmüş açılsın; kapatılabiliyorsa kapansın, gizlenebiliyorsa gizlensin). Bulgular: CLI var olan sohbeti yalnızca TTY'li etkileşimli modda (`--resume <id> --remote-control`) açıyor; `-p` ile bayrak yok sayılıyor; `claude remote-control` sunucu modu pencere açmıyor ama var olan yerel sohbete bağlanmıyor (`--session-id` claude.ai oturum kimliği ister, ilk açılışta "Enable Remote Control? (y/n)" sorar, güvenilmeyen klasörde hata verir). Yapılacak: Windows'ta `start "" /min` ile küçültülmüş cmd, Mac'te Terminal arka planda (`open -g`); ilk açılış onayları (klasör güveni, "Claude in Chrome" tanıtımı) için panelde "Pencereyi göster" düğmesi; kapatma düğmesi süreci sonlandırsın.
-4. Sürüm 0.2.9: `SURUM-NOTU.txt`, `PLAN.md` bölüm 22, yayın akışı.
+## Durum (0.3.0, 2026-11-06)
+0.3.0 özellikleri `PLAN.md` bölüm 22'de. Eski yarım dallar (`ozellik/at-dosya`, `baglam`, `dosya-farki`, `mesaj-duzenle`) bu sürüme birleşti; `ozellik/terminal` ve `ozellik/tarayici` kapsam dışı kaldı (birleştirilmedi).
+- Selftest'i Windows'ta `--disable-gpu` ve ayrı `--user-data-dir` ile çalıştır (run.js bunu yapar); gerçek `~/.claude/projects` büyükse `USERPROFILE`'ı geçici eve yönlendir.
+- Renderer betikleri aynı global kapsamı paylaşır: yeni modül `window.X`/`module.exports` sarmalıyla yazılır, üst düzey `const` ekleme.
+- Windows'ta Python ile dosya yazarken `newline=''` kullan (yoksa CRLF olur, birleştirmede bütün dosya çakışır).
+- Uzaktan Kontrol penceresi işi (eski madde 3) hâlâ yapılmadı.
 
 ## Bekleyenler
 - **Gerçek Windows'ta denenmedi:** NAS güncellemesi, `C:\Claude Panel` yansısı, kapanış onayı, Uzaktan Kontrol (claude.ai'den bağlanma), Win+H sesli yazma, görev çubuğu sayacı ve bildirimler, agent-desktop (`npm install -g agent-desktop`).
 - **Exe kod imzası (Authenticode):** sertifika yok → SmartScreen uyarısı.
-- Mac dmg imzasız, Mac'te otomatik güncelleme yok.
+- Mac: ad-hoc imzalı; güncelleme `macupdate.js` ile (gerçek Mac'te denenmedi). Ekran kontrolünde fare/klavye yalnız Windows.
 - Gözlemler: oturum dizini yalnızca uuid ile anahtarlı; yansı kökü ve NAS IP'si koda gömülü; "gizli" = panelden kalıcı kaldırılmış (tasarım gereği).

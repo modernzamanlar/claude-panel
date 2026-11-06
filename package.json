@@ -1,6 +1,6 @@
 {
   "name": "claude-panel",
-  "version": "0.2.8",
+  "version": "0.3.0",
   "description": "Claude Code sohbetlerini klasörlerde gruplayan, yan yana çalıştıran ve senkron tutan masaüstü paneli",
   "main": "src/main/main.js",
   "private": true,
