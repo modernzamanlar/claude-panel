@@ -29,8 +29,8 @@ test('kenarlar: sağa/sola taşan menü pencere içine kaydırılır; pencereden
 
 test('bölme sınırı: menü sığıyorsa bölmenin içinde kalır, sığmıyorsa yalnız pencereye kısıtlanır', () => {
   const b = { left: 64, right: 676 };
-  assert.strictEqual(place(btn(600, 975), { width: 330, height: 190 }, V, { bounds: b }).x, 676 - 330);
-  assert.strictEqual(place(btn(70, 975), { width: 330, height: 190 }, V, { bounds: b, align: 'end' }).x, 64);
+  assert.strictEqual(place(btn(600, 975), { width: 330, height: 190 }, V, { bounds: b }).x, 636 - 330);   // sağdan taşan 'start' → düğmenin sağ kenarına hizalı
+  assert.strictEqual(place(btn(70, 975), { width: 330, height: 190 }, V, { bounds: b, align: 'end' }).x, 70);   // soldan taşan 'end' → düğmenin sol kenarına hizalı
   assert.strictEqual(place(btn(600, 975), { width: 700, height: 190 }, V, { bounds: b }).x, 600);   // bölmeden geniş
   assert.strictEqual(place(btn(1900, 975), { width: 330, height: 190 }, V, { bounds: { left: 0, right: 5000 } }).x, 1920 - 8 - 330);
 });
@@ -77,4 +77,19 @@ test('tarayıcıda window.menuPos olarak yüklenir', () => {
   assert.deepStrictEqual(Object.keys(ctx.window.menuPos), ['place']);
   const ctx2 = {}; vm.createContext(ctx2); vm.runInContext(src, ctx2, { filename: MOD });
   assert.strictEqual(typeof ctx2.menuPos, 'object');
+});
+
+test('karşı hizaya geçiş: istenen hizada taşan menü karşı hizada sığıyorsa oraya, ikisinde de sığmıyorsa kenara kaydırılır', () => {
+  const m = { width: 300, height: 100 }, b = { left: 400, right: 1000 };
+  // sağ yarıdaki düğme 'end' istedi ama bölmenin solundan taşıyor → 'start' (düğmenin sol kenarı)
+  assert.strictEqual(place(btn(420, 900), m, V, { align: 'end', bounds: b }).x, 420);
+  // 'start' istendi, sağdan taşıyor → 'end' (düğmenin sağ kenarı)
+  assert.strictEqual(place(btn(900, 900), m, V, { align: 'start', bounds: b }).x, 936 - 300);
+  // dar bölme: iki hizada da taşıyor → bölme kenarına kaydırılır, düğmeyi örter
+  const nb = { left: 400, right: 720 };
+  assert.strictEqual(place(btn(600, 900), m, V, { align: 'end', bounds: nb }).x, 400);
+  assert.strictEqual(place(btn(600, 900), m, V, { align: 'start', bounds: nb }).x, 420);
+  // orta hiza ve yan açılım bu kurala girmez
+  assert.strictEqual(place(btn(420, 900), m, V, { align: 'center', bounds: b }).x, 400);
+  assert.strictEqual(place(btn(1000, 500), m, V, { side: 'right' }).x, 1042);
 });

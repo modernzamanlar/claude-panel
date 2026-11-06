@@ -56,14 +56,22 @@
   const check = sel => { const b = p0.querySelector(sel); b.click(); const m = document.querySelector('.menu'); if(!m) return {yok: true};
     const a = b.getBoundingClientRect(), r = m.getBoundingClientRect();
     return {bosluk: Math.round(a.top - r.bottom), solFark: Math.round(r.left - a.left), sagFark: Math.round(a.right - r.right),
-      pencereIci: r.left >= 0 && r.right <= innerWidth && r.top >= 0 && r.bottom <= innerHeight, bolmeIci: r.left >= pr.left - 1 && r.right <= pr.right + 1, yan: m.dataset.side}; };
-  const good = o => o.bosluk >= 0 && o.bosluk <= 10 && (Math.abs(o.solFark) <= 1 || Math.abs(o.sagFark) <= 1) && o.pencereIci && o.bolmeIci;
+      pencereIci: r.left >= 0 && r.right <= innerWidth && r.top >= 0 && r.bottom <= innerHeight, bolmeIci: r.left >= pr.left - 1 && r.right <= pr.right + 1, bolmeKenari: Math.abs(r.left - Math.max(8, pr.left)) <= 1 || Math.abs(r.right - Math.min(innerWidth - 8, pr.right)) <= 1, yan: m.dataset.side}; };
+  /* Düğmenin sol ya da sağ kenarına hizalı; dar bölmede iki hizada da sığmıyorsa bölme kenarına kaydırılır ve düğmeyi örter */
+  const good = o => o.bosluk >= 0 && o.bosluk <= 10 && (Math.abs(o.solFark) <= 1 || Math.abs(o.sagFark) <= 1 || (o.solFark <= 0 && o.sagFark <= 0 && o.bolmeKenari)) && o.pencereIci && o.bolmeIci;
   for(const [k, sel] of [['model', '[data-model]'], ['dusunme', '[data-effort]'], ['sablon', '[data-tpl]']]){ res[k] = check(sel); closeMenu(); await W(50); }
   res.kullanim = check('[data-usage]');
   const m = document.querySelector('.menu'), y0 = m && m.getBoundingClientRect().top;
   p0.querySelector('.msgs').scrollTop -= 200; p0.querySelector('.msgs').dispatchEvent(new Event('scroll')); dispatchEvent(new Event('resize')); await W(100);
   res.kaydirSonra = !!document.querySelector('.menu') && Math.round(document.querySelector('.menu').getBoundingClientRect().top) === Math.round(y0);
-  res.ok = [res.model, res.dusunme, res.sablon, res.kullanim].every(good) && res.kaydirSonra;
+  /* Tek bölmede (geniş) kullanım menüsü düğmenin bir kenarına tam hizalı olmalı */
+  closeMenu(); document.querySelector('#layouts [data-l="1"]').click(); await W(400);
+  const p1 = document.querySelector('[data-pane="0"]'), u1 = p1.querySelector('[data-usage]'); u1.click();
+  const m1 = document.querySelector('.menu'), a1 = u1.getBoundingClientRect(), r1 = m1 && m1.getBoundingClientRect();
+  res.kullanimGenis = r1 ? {bosluk: Math.round(a1.top - r1.bottom), solFark: Math.round(r1.left - a1.left), sagFark: Math.round(a1.right - r1.right)} : {yok: true};
+  closeMenu(); document.querySelector('#layouts [data-l="3"]').click(); await W(300);
+  const g = res.kullanimGenis;
+  res.ok = [res.model, res.dusunme, res.sablon, res.kullanim].every(good) && res.kaydirSonra && g.bosluk >= 0 && g.bosluk <= 10 && (Math.abs(g.solFark) <= 1 || Math.abs(g.sagFark) <= 1);
   return res;
 })()
 //--

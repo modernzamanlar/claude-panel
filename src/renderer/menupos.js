@@ -32,6 +32,11 @@
     }
     let lo = M, hi = R;
     if (o.bounds && Math.min(R, o.bounds.right) - Math.max(M, o.bounds.left) >= m.width) { lo = Math.max(M, o.bounds.left); hi = Math.min(R, o.bounds.right); }
+    // Üstte/altta açılan menü istenen hizada taşıyorsa ve karşı hizada sığıyorsa ona geçer (kenara kaydırmaktan iyidir)
+    if ((side === 'above' || side === 'below') && align !== 'center' && (x < lo || x + m.width > hi)) {
+      const alt = align === 'end' ? a.left : a.right - m.width;
+      if (alt >= lo && alt + m.width <= hi) x = alt;
+    }
     return {
       x: Math.round(Math.max(lo, Math.min(x, hi - m.width))),
       y: Math.round(clamp(y, T, Math.max(T, B - Math.min(m.height, B - T)))),
