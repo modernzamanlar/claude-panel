@@ -772,7 +772,8 @@ document.addEventListener('contextmenu', e => {
     <button data-m="fpshow" data-p="${esc(p)}">${ic('folder')}Klasörde göster</button>
     <button data-m="fpcopy" data-p="${esc(p)}">${ic('clip')}Yolu kopyala</button>`);
 }, true);
-const toolHTML = b => `<div class="tool ${b.err?'terr':''}"><div class="tool-h">${b.running?'<span class="spin"></span>':ic('chev','chev')}${ic(b.n==='Bash'?'term':b.n==='Read'?'file':/Write|Edit/.test(b.n)?'edit':'sliders')}<b>${esc(b.n)}</b><span class="mono">${esc(b.a)}</span>${thumbs(b.imgs, 'th-in')}</div><div class="tool-b">${esc(b.o)}</div></div>`;
+// Düzenleme araçlarında (b.d) başlıkta +N −M, açılınca renkli fark (diff.js); hata olursa araç çıktısı da altında
+const toolHTML = b => { const dv = diffView.html(b.d); return `<div class="tool ${b.err?'terr':''}"><div class="tool-h">${b.running?'<span class="spin"></span>':ic('chev','chev')}${ic(b.n==='Bash'?'term':b.n==='Read'?'file':/Write|Edit/.test(b.n)?'edit':'sliders')}<b>${esc(b.n)}</b><span class="mono">${esc(b.a)}</span>${dv ? dv.badge : ''}${thumbs(b.imgs, 'th-in')}</div><div class="tool-b${dv ? ' dv-b' : ''}">${dv ? dv.html + (b.err && b.o ? `<div class="dv-o">${esc(b.o)}</div>` : '') : esc(b.o)}</div></div>`; };
 // Art arda gelen araç çağrıları tek satırda toplanır ("7 araç · browser_batch ×6, Bash"); tıklayınca açılır. Açık olanlar yeniden çizimde açık kalır.
 const TGOPEN = new Set();
 const toolShort = n => n.replace(/^.*·\s*/, '');
@@ -989,7 +990,7 @@ function renderInfo(){
       ${!S.connOpen ? '' : `<div class="conn-list">${connRows(s, conns)}<button class="act" data-mcpcheck style="margin-top:6px;font-size:12px">${S.mcpCheck && S.mcpCheck.loading ? 'Kontrol ediliyor…' : 'Durumu şimdi kontrol et'}</button></div>`}
     </div>
     ${mediaSection(s)}
-    <div class="isec"><h4>Çıktılar</h4>
+    <div class="isec"><h4>Çıktılar <button class="act cx-open" data-cxopen="${s.id}" title="Bu sohbette değişen dosyalar, fark ve geri alma">Değişen dosyalar</button></h4>
       ${s.outputs.length ? s.outputs.map(o=>`<div class="irow">${ic(/\.html?$/.test(o)?'globe':/\.(md|txt|docx)$/.test(o)?'note':'file')}<span class="lbl" title="${esc(o)}">${esc(o.split(/[\\/]/).pop())}</span><span class="ok mono odir">${esc(/[\\/]/.test(o)?o.split(/[\\/]/).slice(0,-1).join('/'):'')}</span></div>`).join('') : '<div style="color:var(--faint);font-size:12.5px">Bu oturumda henüz dosya oluşturulmadı.</div>'}
     </div>`;
 }
@@ -1190,6 +1191,7 @@ function sessMenu(id, x, y){
     <button data-m="pin" data-id="${id}">${ic('pin')}${s.pinned?'Sabitlemeyi kaldır':'Sabitle'}</button>
     <button data-m="ext" data-id="${id}">${ic('ext')}Proje klasörünü aç</button>
     <button data-m="ql" data-id="${id}">${ic('search')}Önizle (Boşluk)</button>
+    <button data-m="changes" data-id="${id}">${ic('edit')}Değişen dosyalar</button>
     <button data-m="movedlg" data-id="${id}">${ic('folder')}Taşı…</button>
     <hr><button data-m="trash" data-id="${id}" style="color:#c0392b">${ic('trash')}Çöp Kutusuna taşı</button>`);
 }
@@ -1251,6 +1253,7 @@ document.addEventListener('click', e => {
     if(d.m==='cut'){ FX.clip = [...FX.sel]; renderBoard(); toast(`${FX.clip.length} öğe kesildi · hedef klasörde ⌘V`); }
     if(d.m==='withsel'){ closeMenu(); openNewFolder(curFolder(), [...FX.sel]); return; }
     if(d.m==='ql'){ closeMenu(); quickLook(d.id); return; }
+    if(d.m==='changes'){ closeMenu(); const cs = sess(d.id); if(cs) changesUI.open(cs.uuid, cs.title); return; } // oturumun toplu farkı (changes-ui.js)
     if(d.m==='bgchat'){ closeMenu(); newChat(d.f ? {group:d.f} : {}); return; }
     if(d.m==='bgfolder'){ closeMenu(); openNewFolder(d.f || null); return; }
     if(d.m==='bgpaste'){ closeMenu(); const c = FX.clip; FX.clip = null; if(c) moveInto(c, FX.cwd); return; }
@@ -1381,6 +1384,7 @@ document.addEventListener('click', e => {
   const mc = t.closest('[data-mic]'); if(mc){ dictate(+mc.dataset.mic); return; }
   const tp = t.closest('[data-tpl]'); if(tp){ const r = tp.getBoundingClientRect(); tplMenu(+tp.dataset.tpl, r.left, r.top - 60 - templates().length * 32, {el: tp}); return; }
   const swp = t.closest('[data-swap]'); if(swp){ S.active = +swp.dataset.swap; SR.q = ''; const sq = $('#sq'); if(sq) sq.value = ''; renderRail(); setSearch(true); return; }
+  const cxo = t.closest('[data-cxopen]'); if(cxo){ const cs = sess(cxo.dataset.cxopen); if(cs) changesUI.open(cs.uuid, cs.title); return; }
   const mo = t.closest('[data-more]'); if(mo){ const r = mo.getBoundingClientRect(); sessMenu(mo.dataset.more, r.left-160, r.bottom+4); return; }
   if(t.closest('[data-watch]')){ toast('Salt okuma modunda canlı izleniyor'); return; }
   const fk = t.closest('[data-fork]'); if(fk){
@@ -2049,7 +2053,7 @@ function onRun(p){
     if(ev.type === 'assistant' && ev.message){
       for(const c of ev.message.content || []){
         if(c.type === 'text' && c.text && c.text.trim()){ L.b.push({t:'text', v:md(c.text)}); L.draft = ''; }
-        else if(c.type === 'tool_use'){ const tool = {t:'tool', n:shortTool(c.name), a:toolSum(c.input), o:'', running:true, ...(turnCard(c.name, c.input) || {})}; L.b.push(tool); R.tools.set(c.id, tool);
+        else if(c.type === 'tool_use'){ const tool = {t:'tool', n:shortTool(c.name), a:toolSum(c.input), o:'', running:true, ...(turnCard(c.name, c.input) || {})}; const dd = diffView.data(c.name, c.input); if(dd) tool.d = dd; L.b.push(tool); R.tools.set(c.id, tool);
           const fp = c.input && (c.input.file_path || c.input.notebook_path); if(fp && /^(Write|Edit|MultiEdit|NotebookEdit)$/.test(c.name) && !s.outputs.includes(fp)) s.outputs.unshift(fp); }
       }
       const u = ev.message.usage; if(u && ev.message.model !== '<synthetic>') s.ctx = ((u.input_tokens||0) + (u.cache_read_input_tokens||0) + (u.cache_creation_input_tokens||0) + (u.output_tokens||0)) / 1000;
