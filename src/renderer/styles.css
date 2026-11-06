@@ -706,6 +706,15 @@ body.lassoing, body.lassoing *{user-select:none !important}
 .ghost{position:absolute;inset:0;z-index:0;pointer-events:none;white-space:pre-wrap;word-wrap:break-word;overflow:hidden;color:transparent;line-height:1.5}
 .ghost i{font-style:normal;color:var(--faint);opacity:.8}
 .ghost .gk{font:600 10px var(--sans);color:var(--faint);border:1px solid var(--line2);border-radius:4px;padding:0 4px;margin-left:6px;vertical-align:1px;opacity:.8}
+/* @ ile dosya önerisi (mention-ui.js) */
+.mention-pop{position:fixed;z-index:70;width:min(440px,calc(100vw - 16px));max-height:min(300px,45vh);overflow-y:auto;overscroll-behavior:contain;background:var(--panel);border:1px solid var(--line2);border-radius:10px;box-shadow:0 8px 30px rgba(0,0,0,.18);padding:4px;font-size:13px}
+.mention-pop[hidden]{display:none}
+.mention-pop .mp-h{padding:3px 9px 4px;font-size:11px;color:var(--faint);font-weight:600}
+.mention-pop .mp-it{display:flex;align-items:center;gap:8px;padding:5px 9px;border-radius:6px;cursor:pointer;white-space:nowrap;min-width:0}
+.mention-pop .mp-it.on{background:var(--hover)}
+.mention-pop .mp-it .i{flex:none;color:var(--muted)}
+.mention-pop .mp-it b{font-weight:500;flex:none;max-width:60%;overflow:hidden;text-overflow:ellipsis}
+.mention-pop .mp-it span{color:var(--faint);font-size:12px;overflow:hidden;text-overflow:ellipsis}
 /* Mesaj sırası */
 .queue{max-width:720px;margin:0 auto 8px;border:1px solid var(--line2);background:var(--panel);border-radius:12px;padding:8px 10px;font-size:12.5px;box-shadow:var(--shadow)}
 .q-head{display:flex;align-items:center;gap:8px;color:var(--muted)}
@@ -714,6 +723,22 @@ body.lassoing, body.lassoing *{user-select:none !important}
 .q-row{display:flex;align-items:center;gap:8px;padding:3px 0 0 2px}
 .q-k{width:18px;height:18px;border-radius:50%;background:var(--hover);display:grid;place-items:center;font-size:11px;color:var(--muted);flex:none}
 .q-txt{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+/* "/" menüsü (composer.js; görünüm .mention-pop'tan) ve sıradaki mesajları düzenleme */
+.slash-pop{width:min(560px,calc(100vw - 16px));max-height:min(360px,55vh)}
+.slash-pop .mp-sec{padding:6px 9px 2px;font-size:10.5px;letter-spacing:.04em;text-transform:uppercase;color:var(--faint);font-weight:600}
+.slash-pop .mp-it span{flex:1;min-width:0}
+.slash-pop .sl-hint{font-style:normal;font-family:var(--mono);font-size:11px;color:var(--faint);flex:none;max-width:30%;overflow:hidden;text-overflow:ellipsis}
+.slash-pop .sl-src{font-style:normal;font-size:10.5px;color:var(--muted);border:1px solid var(--line2);border-radius:4px;padding:0 5px;flex:none}
+.q-txt[data-qact]{cursor:text}
+.q-acts{display:flex;gap:1px;flex:none}
+.q-acts .ibtn{width:24px;height:24px}
+.q-acts .ibtn[disabled]{opacity:.3;pointer-events:none}
+.i.flip{transform:rotate(180deg)}
+.q-att{display:inline-flex;align-items:center;gap:2px;color:var(--muted);font-size:11.5px;flex:none}
+.q-att .i{width:13px;height:13px}
+.q-edit{align-items:flex-start}
+.q-edit .q-ta{flex:1;min-width:0;resize:vertical;font:inherit;font-size:12.5px;padding:5px 8px;min-height:44px}
+.q-edit .btn{padding:3px 9px;font-size:12px}
 /* Başka yerde açık sohbete gönderme sorusu */
 .fork-card .btn .sub{font-size:11px;opacity:.75;margin-left:4px}
 .fork-card .perm-acts{align-items:center}

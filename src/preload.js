@@ -45,6 +45,7 @@ contextBridge.exposeInMainWorld('api', {
     describeFiles: paths => ipcRenderer.invoke('fs:describeFiles', paths),
     recentMedia: dir => ipcRenderer.invoke('fs:recentMedia', dir),
     saveAnnotated: (data, name) => ipcRenderer.invoke('img:saveAnnotated', data, name),
+    listFiles: (dir, query) => ipcRenderer.invoke('fs:listFiles', dir, query),
     pathForFile: file => { try { return webUtils.getPathForFile(file); } catch { return null; } },
   },
   claude: {
@@ -76,6 +77,9 @@ contextBridge.exposeInMainWorld('api', {
       ipcRenderer.on('run:event', h);
       return () => ipcRenderer.removeListener('run:event', h);
     },
+  },
+  cmd: {
+    list: cwd => ipcRenderer.invoke('cmd:list', cwd),
   },
   search: {
     query: q => ipcRenderer.invoke('search:query', q),

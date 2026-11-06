@@ -49,7 +49,22 @@ async function turn(msg) {
   const content = msg.message.content;
   const text = (content.find(c => c.type === 'text') || {}).text || '';
   const images = content.filter(c => c.type === 'image').length;
-  out({ type: 'system', subtype: 'init', session_id: sid, cwd: process.cwd(), model: 'claude-opus-5-5', permissionMode: arg('--permission-mode') || 'default', mcp_servers: [{ name: 'fake-mcp', status: 'connected' }, { name: 'fake-voice', status: 'needs-auth' }], tools: [] });
+  out({ type: 'system', subtype: 'init', session_id: sid, cwd: process.cwd(), model: 'claude-opus-5-5', permissionMode: arg('--permission-mode') || 'default', mcp_servers: [{ name: 'fake-mcp', status: 'connected' }, { name: 'fake-voice', status: 'needs-auth' }], tools: [],
+    slash_commands: ['compact', 'context', 'usage', 'clear', 'doctor', 'sahte-skill', 'sahte-komut'], skills: ['sahte-skill'], terminal_slash_commands: ['doctor'] });
+  // Gerçek CLI (2.1.318) init'ten hemen sonra açıklamalı komut listesini de gönderir
+  out({ type: 'system', subtype: 'commands_changed', session_id: sid, commands: [
+    { name: 'compact', description: 'Free up context', argumentHint: '<optional>', builtin: true },
+    { name: 'context', description: 'Show context usage', builtin: true },
+    { name: 'clear', description: 'Start a new session', aliases: ['reset', 'new'], builtin: true },
+    { name: 'sahte-skill', description: 'Sahte CLI skill açıklaması (user)' },
+    { name: 'sahte-komut', description: 'Sahte proje komutu (project)', argumentHint: '<ad>' },
+  ] });
+  // Yerel komut (/compact, /context): model çağrılmaz, çıktı <local-command-stdout> ile gelir
+  const lc = /^\/(compact|context)\b/.exec(text);
+  if (lc) {
+    out({ type: 'user', session_id: sid, message: { role: 'user', content: '<local-command-stdout>' + (lc[1] === 'compact' ? 'Compacted' : '## Context Usage') + '</local-command-stdout>' } });
+    finish(''); return;
+  }
   if (process.env.FAKE_AUTH_FAIL) {
     out({ type: 'assistant', session_id: sid, message: { model: '<synthetic>', content: [{ type: 'text', text: 'Failed to authenticate: OAuth session expired' }] } });
     out({ type: 'result', subtype: 'success', is_error: true, result: 'Failed to authenticate', terminal_reason: 'api_error', session_id: sid });
