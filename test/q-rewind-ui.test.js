@@ -81,7 +81,9 @@ test('validWt / wtName', () => {
 });
 
 test('tarayıcıda window.rewind olarak yüklenir, module.exports olmadan', () => {
-  const vm = require('vm'); const ctx = { window: {} }; vm.createContext(ctx);
-  vm.runInContext(require('fs').readFileSync(require.resolve('../src/renderer/rewind.js'), 'utf8'), ctx);
+  const vm = require('vm'), MOD = require.resolve('../src/renderer/rewind.js'), src = require('fs').readFileSync(MOD, 'utf8');
+  const ctx = { window: {} }; vm.createContext(ctx); vm.runInContext(src, ctx, { filename: MOD });
   assert.deepEqual(Object.keys(ctx.window.rewind).sort(), ['canCode', 'canEdit', 'changeSummary', 'dirsAdd', 'dirsRemove', 'fileRows', 'forkTitle', 'target', 'validWt', 'wtName']);
+  const ctx2 = { module: {} }; vm.createContext(ctx2); vm.runInContext(src, ctx2, { filename: MOD });
+  assert.equal(typeof ctx2.rewind, 'object', 'window yoksa (ve module.exports boşsa) genel nesneye yazılır');
 });
