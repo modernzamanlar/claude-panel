@@ -795,8 +795,9 @@ function planCard(items){
   const done = items.filter(i => i.s === 'completed').length;
   return `<div class="plan-card"><div class="pc-h">${ic('note')}<b>Görevler</b><span>${done}/${items.length}</span></div>${items.map(i => `<div class="pc-i ${i.s}"><span class="pc-b">${i.s === 'completed' ? '✓' : i.s === 'in_progress' ? '<span class="spin"></span>' : ''}</span><span>${esc(i.c)}</span></div>`).join('')}</div>`;
 }
+/* Mesajı düzenle / buraya geri sar: userHTML ve akışın geri kalanı geri-sarma.js'te */
 function msgHTML(s, m, mi){
-  if(m.r==='u') return `<div class="u">${esc(m.t)}</div>${thumbs(m.imgs, 'th-u')}${mediaHTML(s, m, mi, 'u')}`;
+  if(m.r==='u') return userHTML(s, m, mi);
   if(m.r==='c') return `<div class="cmp-line ${m.trigger === 'auto' ? 'auto' : ''}" data-cmp="${m.trigger === 'auto' ? 'auto' : 'manual'}"><span>${esc(window.ctxUsage.compactText(m))}</span></div>`;
   const out = []; let grp = [], gi = 0;
   const flush = () => { if(grp.length){ out.push(toolGroupHTML(grp, s.id + '|' + mi + '|' + gi++)); grp = []; } };
@@ -851,10 +852,10 @@ function paneParts(i){
   return {key:s.id, cls:`pane ${i===S.active?'active':''} ${compact}`,
     head:`${num}
       <div class="ph-main"><div class="ph-title">${esc(s.title)}</div>
-        <div class="ph-sub">${f?`<span class="chip"><span class="dot" style="background:${f.color}"></span>${esc(f.name)}</span><span class="sep">·</span>`:''}<span class="mono">${esc(s.project)}</span></div></div>
+        <div class="ph-sub">${f?`<span class="chip"><span class="dot" style="background:${f.color}"></span>${esc(f.name)}</span><span class="sep">·</span>`:''}<span class="mono">${esc(s.project)}</span>${forkChip(s)}</div></div>
       ${s.remote?`<span class="rc-badge" title="Uzaktan Kontrol açık">${ic('cursor')}<span>Uzaktan</span></span>`:''}${st}<button class="ibtn" data-swap="${i}" title="Bu bölmede başka bir sohbet aç (ara)">${ic('search')}</button><button class="ibtn" data-more="${s.id}">${ic('more')}</button><button class="ibtn" data-close="${i}" title="Bölmeyi kapat">${ic('x')}</button>`,
     banner: s.status==='elsewhere' && !s.run ? `<div class="banner info"><span class="sd"></span>Claude uygulamasında da açık · canlı izleniyor</div>` : '',
-    top: forkCard(s, i) + permCard(s) + queueCard(s) + authBanner(), att: attachChips(s),
+    top: rwCard(s, i) + forkCard(s, i) + permCard(s) + queueCard(s) + authBanner(), att: attachChips(s),
     ph: s.draft ? 'İlk mesajını yaz — sohbet '+s.project.split(/[\\/]/).pop()+' klasöründe başlayacak' : s.run ? 'Sıraya almak için yaz ve Enter — tur bitince gönderilir' : 'Yanıtla…  ( / şablon ve komut · @ dosya · ↑ önceki mesaj · Tab tamamlar )',
     dis: !!(S.auth && !S.auth.loggedIn),
     row:`<button class="ibtn" data-attach="${i}" title="Dosya veya görsel ekle (sürükle-bırak ve yapıştır da olur)">${ic('clip')}</button>
@@ -956,6 +957,7 @@ function renderInfo(){
       <div class="irow">${ic('laptop')}<span class="lbl">Bu bilgisayar</span><button class="act" data-reveal="${esc(s.project)}">Klasörü aç</button></div>
       <div class="irow">${ic('folder')}<span class="lbl">${esc(name)} <span class="sub">· ${esc(s.project.slice(0, Math.max(0, s.project.length - name.length - 1)))}</span></span></div>
       ${f?`<div class="irow"><span style="width:16px;display:grid;place-items:center"><span class="dot" style="background:${f.color}"></span></span><span class="lbl">${esc(f.name)} <span class="sub">· panel klasörü</span></span></div>`:''}
+      ${dirsInfo(s)}
       <div class="irow">${ic('cursor')}<span class="lbl">Uzaktan Kontrol</span><button class="switch ${s.remote?'on':''}" id="swRemote" data-sid="${s.id}"></button></div>
       ${s.remote?`<div class="remote-box"><div class="rt">
         <span class="st ${s.status==='elsewhere'?'ok':''}"><i></i>${s.status==='elsewhere' ? 'Terminal oturumu çalışıyor' : 'Terminal oturumu başlatıldı'}</span>
@@ -1152,6 +1154,7 @@ function renderNC(){
       </div>
       ${gf && gf.dir && gf.dir!==NC.dir?`<div style="font-size:12px;color:var(--muted)">“${esc(gf.name)}” klasörünün proje klasörü: <span class="mono">${esc(gf.dir)}</span> <button class="act" style="text-decoration:underline" data-nc="dir" data-d="${esc(gf.dir)}">Bunu kullan</button></div>`:''}
       ${linked.length && !linked.some(f=>f.id===NC.group)?`<div style="font-size:12px;color:var(--muted)">Bu dizin “${esc(linked[0].name)}” klasörüne bağlı. <button class="act" style="text-decoration:underline" data-nc="uselinked" data-f="${linked[0].id}">O klasöre koy</button></div>`:''}
+      ${ncExtraHTML()}
       <label class="fl">İlk mesaj <span>· isteğe bağlı</span></label>
       <textarea class="inp" id="ncText" rows="3" style="resize:vertical" placeholder="Ne üzerinde çalışalım?">${esc(NC.text)}</textarea>
     </div>
@@ -1169,6 +1172,7 @@ function startChat(){
     folder:NC.group, pinned:false, trashed:false, hidden:false, lastTs:new Date().toISOString(), ago:'şimdi', model:NC.model || 'Opus', newModel:modelAlias || null,
     ctx:0, msgs:[], outputs:[], loaded:true, status:'idle', fresh:false, remote:false, localUntil:Date.now() + 10*60*1000};
   s.rawTitle = auto; // ad verildiyse title ≠ rawTitle → takma ad olarak saklanır, Claude'un başlığı onu ezmez
+  if(!ncApply(s)) return; // ek klasörler + worktree (geri-sarma.js); geçersizse diyalog açık kalır
   S.sessions.unshift(s); S.items.unshift(id);
   const pane = NC.pane; NC = null; renderNC();
   setSearch(false); setOrg(false); openIn(id, pane);
@@ -1259,6 +1263,7 @@ function folderMenu(fid, x, y){
 /* ---------- Events ---------- */
 document.addEventListener('click', e => {
   const t = e.target;
+  if(rwClick(t)) return; // geri-sarma.js: düzenle / geri sar / ek klasör / worktree
   const m = t.closest('.menu [data-m]');
   if(m && m.dataset.m==='tema'){ closeMenu(); WS.prefs = Tema.choose(WS.prefs, m.dataset.v); applyTheme(WS.prefs); persist(); return; }
   if(m && m.dataset.m==='upddef'){ closeMenu(); API.update.resetDir().then(st => { UPD = st; if(st.dirInfo) UPDDIR = st.dirInfo; paintUpd(); updToast(st, true); }); return; }
@@ -1754,6 +1759,7 @@ function fromSummary(x, prev){
     folder: meta.folder && fold(meta.folder) ? meta.folder : null, pinned:!!meta.pinned, trashed:!!meta.trashed, hidden:!!meta.hidden,
     ...('effort' in meta ? {effort: meta.effort} : {}), ...('control' in meta ? {control: !!meta.control} : {}),
     ...(meta.fast ? {fast: true} : {}), ...(meta.cost && typeof meta.cost.usd === 'number' ? {costPanel: meta.cost} : {}), modelId:x.modelId || null,
+    ...(Array.isArray(meta.dirs) ? {dirs: meta.dirs.filter(d => typeof d === 'string')} : {}), ...(meta.forkOf ? {forkOf: meta.forkOf} : {}),
     lastTs:x.lastTs, ago:fmtAgo(x.lastTs), model:x.model || '—', ctx:x.ctxTokens/1000, bridge:x.bridge, permissionMode:x.permissionMode, status: x.live ? 'elsewhere' : 'idle'};
 }
 
@@ -1795,7 +1801,7 @@ function buildWS(){
     Object.entries(WS.meta || {}).forEach(([k, v]) => { if(!sess(k)) meta[k] = v; });
     S.sessions.forEach(s => { const m = {};
       if(s.folder) m.folder = s.folder; if(s.pinned) m.pinned = true; if(s.title !== s.rawTitle) m.alias = s.title;
-      if(s.trashed) m.trashed = true; if(s.hidden) m.hidden = true; if(s.effort !== undefined) m.effort = s.effort; if(s.control !== undefined) m.control = s.control; if(s.fast) m.fast = true; if(s.costPanel) m.cost = s.costPanel; if(Object.keys(m).length) meta[s.id] = m; });
+      if(s.trashed) m.trashed = true; if(s.hidden) m.hidden = true; if(s.effort !== undefined) m.effort = s.effort; if(s.control !== undefined) m.control = s.control; if(s.fast) m.fast = true; if(s.costPanel) m.cost = s.costPanel; if(s.dirs && s.dirs.length) m.dirs = s.dirs; if(s.forkOf) m.forkOf = s.forkOf; if(Object.keys(m).length) meta[s.id] = m; });
     const graphPos = {}; Object.entries(G.pos).forEach(([k,p]) => { if(p.fixed) graphPos[k] = {x:Math.round(p.x), y:Math.round(p.y)}; });
     WS = {...WS, firstRun:false, meta, graphPos, prefs:{...(WS.prefs||{}), fonts:{...FONT}, fontsV:2},
       folders: S.folders.map(({id,name,color,parent,open,dir,trashed,hidden}) => ({id,name,color,parent,open,dir,trashed,hidden})),
@@ -1958,6 +1964,7 @@ async function send(i, opt = {}){
   const text = ta.value.trim(); const att = s.attach || []; if(!text && !att.length) return;
   if(window.CCUI && CCUI.sendHook(i, s, text, ta)) return; // "#" ile başlayan tek satır: gönderilmez, CLAUDE.md'ye not olarak eklenir
   if(!S.auth || !S.auth.loggedIn){ await checkAuth(); if(!S.auth.loggedIn){ toast('Önce Claude Code girişi yapılmalı'); return; } }
+  if(s.rw && !s.run) return rwSend(s, i, ta); // düzenlenen mesaj: o noktadan yeni kopyada devam (geri-sarma.js)
   if(s.run){ // çalışırken yazılan mesaj sıraya girer; tur bitince sırayla gönderilir
     (s.queue = s.queue || []).push({text, att}); s.queuePaused = false;
     ta.value = ''; autosize(ta); s.inputDraft = ''; s.attach = []; updateGhost(ta);
@@ -2002,12 +2009,12 @@ async function sendNow(s, text, att, opt = {}){
   s.attach = [];
   const live = {r:'a', b:[], streaming:true, draft:'', local:true}; s.msgs.push(live);
   const runId = crypto.randomUUID();
-  s.run = {runId, live, tools:new Map(), fork:!!opt.fork, prevStatus:s.status, startedAt:Date.now()}; SV.runStart(s);
+  s.run = {runId, live, tools:new Map(), fork:!!opt.fork, prevStatus:s.status, startedAt:Date.now(), cut:opt.cut}; SV.runStart(s);
   s.status = 'running'; s.ago = 'şimdi'; s.lastTs = new Date().toISOString(); s.fresh = false;
   RUNS.set(runId, s.id);
   render(); { const pi = S.panes.indexOf(s.id); if(pi >= 0) scrollPaneBottom(pi); }
   try {
-    await API.run.start({runId, sessionId:s.uuid, newSession:isNew, fork:!!opt.fork, cwd:s.cwd || s.project, text, images, files, model:s.modelPick || (isNew ? s.newModel : null), permissionMode:pmodeOf(s), effort:effortOf(s), control:controlOf(s), fast:s.fast === true});
+    await API.run.start({runId, sessionId:s.uuid, newSession:isNew, fork:!!opt.fork, resumeAt:opt.resumeAt || null, addDirs:s.dirs || [], worktree:isNew ? s.worktree || null : null, cwd:s.cwd || s.project, text, images, files, model:s.modelPick || (isNew ? s.newModel : null), permissionMode:pmodeOf(s), effort:effortOf(s), control:controlOf(s), fast:s.fast === true});
     s.draft = false; return true;
   } catch(e){
     RUNS.delete(runId); s.run = null; s.status = 'idle'; live.streaming = false;
@@ -2036,11 +2043,13 @@ function forkTo(s, newUuid){
   const R = s.run; const nid = sid(newUuid);
   const userMsg = s.msgs[s.msgs.length - 2];
   s.msgs.splice(-2, 2); s.run = null; s.status = R.prevStatus || 'idle';
-  const n = {...s, localUntil:Date.now() + 10*60*1000, id:nid, uuid:newUuid, title:s.title + ' (çatal)', rawTitle:s.rawTitle || s.title, msgs:[...s.msgs, userMsg, R.live], run:R, status:'running', pinned:false, trashed:false, fresh:false, loaded:true};
+  // Düzenlenen mesajda (R.cut) yeni oturum yalnızca o mesajdan önceki geçmişi taşır
+  const ed = R.cut != null, base = ed ? s.msgs.slice(0, R.cut) : s.msgs;
+  const n = {...s, localUntil:Date.now() + 10*60*1000, id:nid, uuid:newUuid, title:ed ? rewind.forkTitle(s.title) : s.title + ' (çatal)', rawTitle:s.rawTitle || s.title, msgs:[...base, userMsg, R.live], run:R, status:'running', pinned:false, trashed:false, fresh:false, loaded:true, rw:null, forkOf:ed ? s.id : null};
   S.sessions.unshift(n); S.items.unshift(nid);
   S.panes = S.panes.map(p => p === s.id ? nid : p);
   RUNS.set(R.runId, nid);
-  render(); toast('Çatallandı: yeni oturumda devam ediliyor');
+  render(); toast(ed ? 'Mesaj düzenlendi: yeni sohbette devam ediliyor · asıl sohbet duruyor' : 'Çatallandı: yeni oturumda devam ediliyor');
   return n;
 }
 
@@ -2126,6 +2135,7 @@ function onRun(p){
     if(window.composerUI && composerUI.onEvent(s, ev)){ scheduleLive(s); return; } // komut listesi, yerel komut çıktısı
     if(ev.type === 'system' && ev.subtype === 'init'){
       if(R.fork && ev.session_id && ev.session_id !== s.uuid) s = forkTo(s, ev.session_id);
+      rwInit(s, ev);
       s.connectorsLive = ev.mcp_servers || []; if(ev.model){ s.model = prettyModelR(ev.model); s.modelId = ev.model; }
       if(S.panes[S.active] === s.id) renderInfo();
       return;

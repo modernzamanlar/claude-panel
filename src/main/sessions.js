@@ -256,7 +256,10 @@ function resultText(content) {
  * Ayrıca Write/Edit/NotebookEdit ile değiştirilen dosyaları "çıktılar" olarak toplar.
  */
 // Ayrıştırma durumu satır satır beslenir; tam okuma (loadSession) ve artımlı okuma (SessionLoader) aynı kodu kullanır.
-const newParse = () => ({ msgs: [], toolById: new Map(), outputs: new Map(), turns: 0, todo: todos.newState(), bg: bgtasks.newState(), tally: tally.newTally() });
+// lastA: son asistan kaydının uuid'si. Kullanıcı mesajına `at` olarak yazılır: mesajı düzenleyip oradan devam ederken
+// CLI'ye --resume-session-at <at> verilir ('' = sohbetin başı, önünde asistan mesajı yok). uuid'siz kayıtta `at` olmaz.
+// `uuid`: kullanıcı mesajının kendi kimliği (kod geri sarma). İkisi de yalnız düzenlenebilir mesajda bulunur.
+const newParse = () => ({ msgs: [], toolById: new Map(), outputs: new Map(), turns: 0, todo: todos.newState(), bg: bgtasks.newState(), tally: tally.newTally(), lastA: null });
 const MAXTH = 20000; // tek düşünme bloğunda tutulan en çok karakter
 const NOTIF_RX = /^(\[SYSTEM NOTIFICATION[^\n]*\n[\s\S]*?)?<task-notification>/;
 // Arka plan görevi bildirimi (<task-notification>): görev listesini günceller; ilgili alt ajan bloğu da biter
@@ -293,11 +296,14 @@ function feedLine(st, line, side) {
     if (NOTIF_RX.test(t) && feedNotif(st, t, e.timestamp)) return;
     if (isNoise(t)) return;
     const um = { r: 'u', t: t.slice(0, 8000), ts: e.timestamp }; const uim = imagesOf(c); if (uim.length) um.imgs = uim;
+    if (e.uuid && t.length <= 8000) um.at = st.lastA || ''; // kısaltılmış metin düzenlemeye açılmaz (eksik gönderilmesin)
+    if (um.at !== undefined) um.uuid = e.uuid; // kod geri sarma (rewind_files) bu kullanıcı mesajının kimliğini ister
     st.msgs.push(um);
     st.turns++;
     return;
   }
   if (e.type === 'assistant' && e.message && Array.isArray(e.message.content)) {
+    if (typeof e.uuid === 'string' && e.uuid) st.lastA = e.uuid;
     let last = st.msgs[st.msgs.length - 1];
     if (!last || last.r !== 'a') { last = { r: 'a', b: [], ts: e.timestamp }; st.msgs.push(last); }
     for (const c of e.message.content) {

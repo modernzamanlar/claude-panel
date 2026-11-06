@@ -1,7 +1,8 @@
 // Faz 2: Panelden Claude Code çalıştırma.
 // Her gönderim için kurulu `claude` CLI'si başsız (print) modda başlatılır:
 //   claude -p --input-format stream-json --output-format stream-json --verbose --include-partial-messages
-//          [--resume <id> | --session-id <yeni-uuid>] [--fork-session] [--model m] [--permission-mode p]
+//          [--resume <id> | --session-id <yeni-uuid> [--worktree ad]] [--fork-session] [--resume-session-at <mesaj-uuid>] [--model m] [--permission-mode p] [--add-dir k]…
+// Her süreç CLAUDE_CODE_ENABLE_SDK_FILE_CHECKPOINTING ile başlar: CLI dosya değişikliklerini kaydeder, `filesRewind` ile geri sarılabilir.
 // Mesajlar Claude Code'un kendi .jsonl dosyasına yazıldığı için Claude uygulaması/CLI ile senkron kalır.
 // Her bölme kendi sürecini çalıştırır; süreçler birbirini beklemez.
 // Faz 3: `--permission-prompt-tool stdio` ile izin gerektiren araçlar için CLI stdout'a
@@ -14,6 +15,7 @@ const os = require('os');
 const path = require('path');
 const crypto = require('crypto');
 const ctxUsage = require('../renderer/ctxusage');
+const RW = require('./rewind');
 
 const HOME = os.homedir();
 // Yalnızca "~" ve "~/…" (Windows'ta "~\\…") genişletilir; "~kullanici" ya da "~yedek" gibi adlar olduğu gibi kalır
@@ -166,6 +168,7 @@ const PERMISSION_MODES = new Set(['default', 'acceptEdits', 'bypassPermissions',
 const MODEL_RX = /^((opus|sonnet|haiku|fable)(\[1m\])?|default|claude-[a-z0-9.-]+(\[1m\])?)$/i;
 const EFFORTS = new Set(['low', 'medium', 'high', 'xhigh', 'max']); // claude --effort
 function checkUuid(id) { if (!UUID.test(String(id))) throw new Error('Geçersiz oturum kimliği'); return String(id); }
+function checkResumeAt(id) { if (typeof id !== 'string' || !UUID.test(id)) throw new Error('Geçersiz devam noktası'); return id; }
 function checkDir(p) {
   const d = expand(p);
   let ok = false; try { ok = !!d && fs.statSync(d).isDirectory(); } catch {}
@@ -253,24 +256,36 @@ class Runner {
     this.runs = new Map();      // runId -> {proc, sessionId, ...}
   }
   /**
-   * opts: {runId, sessionId?, newSession?, fork?, cwd, text, model?, permissionMode?, effort?, control?, fast?}
+   * opts: {runId, sessionId?, newSession?, fork?, resumeAt?, cwd, text, model?, permissionMode?, effort?, control?, fast?, addDirs?, worktree?}
+   * resumeAt: asistan mesajının uuid'si → --resume-session-at (+ --fork-session): o mesajdan sonrası yeni oturuma alınmaz.
+   * addDirs: ek klasörler (var olan, mutlak) → --add-dir; worktree: yalnız yeni sohbette, CLI'nin --worktree <ad> seçeneği.
    * Dönüş: {runId, sessionId} — yeni sohbette sessionId önceden üretilir (--session-id).
    */
   async start(opts) {
     const bin = await claudeBin();
     if (!bin) throw new Error('claude komutu bulunamadı. Claude Code CLI kurulu olmalı (ör. ~/.local/bin/claude' + (isWin() ? '.exe' : '') + ').');
     const env = await loginEnv();
+    env[RW.CHECKPOINT_ENV] = 'true'; // dosya kaydı: kod geri sarma için (ayıklanan CLAUDE_CODE_* değişkenlerinden sonra eklenir)
     const cwd = checkDir(opts.cwd);
     if (opts.sessionId) checkUuid(opts.sessionId);
+    const addDirs = RW.checkAddDirs(opts.addDirs, cwd);
+    const worktree = opts.worktree ? RW.checkWorktreeName(opts.worktree) : null;
+    if (worktree && !opts.newSession) throw new Error('Worktree yalnız yeni sohbette açılabilir');
+    if (worktree) { const wi = await worktreeInfo(cwd, worktree); if (!wi.ok) throw new Error(wi.error); } // git yok / depo değil / ad ya da dal var
     if (opts.model && !MODEL_RX.test(String(opts.model))) throw new Error('Geçersiz model: ' + opts.model);
     if (opts.permissionMode && !PERMISSION_MODES.has(opts.permissionMode)) throw new Error('Geçersiz izin modu: ' + opts.permissionMode);
     if (opts.effort && !EFFORTS.has(opts.effort)) throw new Error('Geçersiz düşünme seviyesi: ' + String(opts.effort).slice(0, 20));
     if (opts.fast !== undefined && opts.fast !== null && typeof opts.fast !== 'boolean') throw new Error('Geçersiz hızlı mod değeri');
+    const resumeAt = opts.resumeAt ? checkResumeAt(opts.resumeAt) : null;
+    if (resumeAt && opts.newSession) throw new Error('Yeni sohbette devam noktası olamaz');
+    const fork = !!(opts.fork || resumeAt);
     const runId = opts.runId || crypto.randomUUID();
     const args = ['-p', '--input-format', 'stream-json', '--output-format', 'stream-json', '--verbose', '--include-partial-messages'];
     let sessionId = opts.sessionId;
-    if (opts.newSession) { sessionId = sessionId || crypto.randomUUID(); args.push('--session-id', sessionId); }
-    else { if (!sessionId) throw new Error('Oturum kimliği yok'); args.push('--resume', sessionId); if (opts.fork) args.push('--fork-session'); }
+    if (opts.newSession) { sessionId = sessionId || crypto.randomUUID(); args.push('--session-id', sessionId); if (worktree) args.push('--worktree', worktree); }
+    else { if (!sessionId) throw new Error('Oturum kimliği yok'); args.push('--resume', sessionId); if (fork) args.push('--fork-session'); }
+    // Mesajı düzenleyip oradan devam: geçmiş bu asistan mesajına kadar alınır, her zaman yeni oturuma çatallanır (asıl sohbet bozulmaz)
+    if (resumeAt) args.push('--resume-session-at', resumeAt);
     if (opts.model) args.push('--model', opts.model);
     if (opts.permissionMode) args.push('--permission-mode', opts.permissionMode);
     if (opts.effort) args.push('--effort', opts.effort);
@@ -283,6 +298,7 @@ class Runner {
       const ad = await desktopTool(env);
       if (ad) args.push('--mcp-config', writeDesktopMcp(ad));
     }
+    for (const d of addDirs) args.push('--add-dir', d);
     args.push('--permission-prompt-tool', 'stdio');
     if (opts.ephemeral) args.push('--no-session-persistence'); // yalnızca testler: oturum dosyası yazılmaz
 
@@ -292,7 +308,7 @@ class Runner {
     const proc = spawnClaude(bin, args, { cwd, env, stdio: ['pipe', 'pipe', 'pipe'] });
     const run = { runId, proc, sessionId, startedAt: Date.now(), stderr: '', done: false, pending: new Set(), timers: [] };
     this.runs.set(runId, run);
-    this.send('run:event', { runId, type: 'started', sessionId, fork: !!opts.fork, newSession: !!opts.newSession });
+    this.send('run:event', { runId, type: 'started', sessionId, fork, newSession: !!opts.newSession });
 
     let buf = '';
     proc.stdout.setEncoding('utf8');
@@ -445,6 +461,51 @@ async function contextUsage(sessionId, cwd, opts = {}) {
   });
 }
 
+/**
+ * Kod geri sarma: `claude -p --resume <id>` süreci açılır, kullanıcı mesajı gönderilmeden yalnız `rewind_files` kontrol isteği
+ * yazılır (model çağrısı yok), yanıt gelince süreç kapatılır. dryRun: yalnız hangi dosyaların değişeceğini söyler.
+ * opts: {sessionId, cwd, userMessageId, dryRun?, timeoutMs?} → {canRewind, files, insertions, deletions, error}
+ */
+async function filesRewind(opts) {
+  const bin = await claudeBin();
+  if (!bin) throw new Error('claude komutu bulunamadı');
+  const id = checkUuid(opts.sessionId);
+  const cwd = checkDir(opts.cwd);
+  const requestId = crypto.randomUUID();
+  const line = JSON.stringify(RW.rewindRequest(requestId, opts.userMessageId, !!opts.dryRun)) + '\n';
+  const env = await loginEnv();
+  env[RW.CHECKPOINT_ENV] = 'true';
+  const proc = spawnClaude(bin, ['-p', '--input-format', 'stream-json', '--output-format', 'stream-json', '--verbose', '--resume', id], { cwd, env, stdio: ['pipe', 'pipe', 'pipe'] });
+  return new Promise((resolve, reject) => {
+    let buf = '', stderr = '', done = false;
+    const end = fn => { if (done) return; done = true; clearTimeout(timer); try { proc.stdin.end(); } catch {} fn(); };
+    const timer = setTimeout(() => end(() => { killTree(proc, 'SIGTERM'); reject(new Error('Claude yanıt vermedi (zaman aşımı)')); }), opts.timeoutMs || 60000);
+    proc.stdout.setEncoding('utf8');
+    proc.stdout.on('data', chunk => {
+      buf += chunk; let i;
+      while ((i = buf.indexOf('\n')) >= 0) {
+        const l = buf.slice(0, i); buf = buf.slice(i + 1);
+        let ev; try { ev = JSON.parse(l); } catch { continue; }
+        if (ev && ev.type === 'control_response' && ev.response && ev.response.request_id === requestId) end(() => resolve(RW.rewindResult(ev.response)));
+      }
+    });
+    proc.stderr.setEncoding('utf8');
+    proc.stderr.on('data', d => { stderr = (stderr + d).slice(-2000); });
+    proc.on('error', err => end(() => reject(err)));
+    proc.on('close', code => end(() => reject(new Error(`Claude süreci yanıt vermeden kapandı (çıkış ${code})${stderr.trim() ? ': ' + stderr.trim().slice(-300) : ''}`))));
+    proc.stdin.on('error', () => {});
+    proc.stdin.write(line);
+  });
+}
+
+// Yeni sohbet diyaloğu: klasör git deposu mu, worktree adı kullanılabilir mi (git execFile ile, kabuk yok)
+async function worktreeInfo(dir, name) {
+  const d = checkDir(dir);
+  const git = args => new Promise(resolve => deps.execFile('git', ['-C', d, ...args], { timeout: 10000, windowsHide: true }, (err, out) =>
+    resolve({ ok: !err, out: String(out || ''), enoent: !!err && err.code === 'ENOENT' })));
+  return RW.worktreeInfo(git, name);
+}
+
 // Testler için: bağımlılıklar ve önbellek sıfırlama
 const _test = { deps, winQuote, safeLabel, expand, reset(lp = null) { loginPathCache = lp; launchCache.clear(); } };
-module.exports = { Runner, authStatus, openLoginTerminal, openRemoteTerminal, mcpList, contextUsage, claudeBin, loginEnv, launchSpec, controlStatus, installDesktop, desktopMcp, _test };
+module.exports = { Runner, authStatus, openLoginTerminal, openRemoteTerminal, mcpList, contextUsage, filesRewind, worktreeInfo, claudeBin, loginEnv, launchSpec, controlStatus, installDesktop, desktopMcp, _test };

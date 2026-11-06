@@ -67,6 +67,10 @@ contextBridge.exposeInMainWorld('api', {
     openAgent: (scope, file, cwd) => ipcRenderer.invoke('ccfg:openAgent', scope, file, cwd),
     exportMd: (name, text) => ipcRenderer.invoke('ccfg:export', name, text),
   },
+  rewind: {
+    files: opts => ipcRenderer.invoke('rewind:files', opts),
+    worktreeInfo: (dir, name) => ipcRenderer.invoke('git:worktreeInfo', dir, name),
+  },
   run: {
     start: opts => ipcRenderer.invoke('run:start', opts),
     stop: runId => ipcRenderer.invoke('run:stop', runId),
