@@ -56,9 +56,18 @@
     SP.el.style.bottom = (innerHeight - c.top + 6) + 'px';
   }
 
+  // Seçili öğe şablonsa eski "/ad" hayalet önerisi (Tab ile aynı şablon) görünmeye devam eder; komut/skill seçiliyken gizlenir
+  function syncGhost() {
+    const ta = SP.ta, it = !SP.el.hidden && SP.list[SP.sel];
+    ta._slash = !!it && it.sec !== 'tpl';
+    updateGhost(ta);
+    if (it && ta._sug && (ta._sug.kind !== 'template' || ta._sug.name !== it.name)) { ta._sug = null; ta.parentElement.querySelector('.ghost').innerHTML = ''; }
+  }
+
   function paintSlash() {
     const el = SP.el;
     el.hidden = !SP.list.length;
+    syncGhost();
     if (el.hidden) return;
     el.innerHTML = `<div class="mp-h">/ menüsü · ↑↓ seç · Tab/↵ ekle · Esc kapat</div>` + slash.sections(SP.list).map(g =>
       `<div class="mp-sec">${esc(g.title)}</div>` + g.items.map(({ it, k }) =>
