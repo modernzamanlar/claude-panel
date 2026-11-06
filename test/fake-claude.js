@@ -2,7 +2,7 @@
 // Testler için sahte `claude` CLI: stream-json olaylarını ve izin (control_request) protokolünü
 // gerçek CLI'ye benzer sırayla üretir. Ortam değişkenleri:
 //   FAKE_DELAY=ms  FAKE_PERM=1 (Bash için izin ister)  FAKE_ASK=1 (AskUserQuestion)  FAKE_AUTH_FAIL=1  FAKE_LOGGED_OUT=1
-//   FAKE_AUTOCOMPACT=1 (tur ortasında otomatik sıkıştırma). "/compact" mesajı elle sıkıştırma olaylarını üretir.
+//   FAKE_AUTOCOMPACT=1 ya da mesajda "[oto-sıkıştır]" (tur ortasında otomatik sıkıştırma). "/compact" mesajı elle sıkıştırma olaylarını üretir.
 const crypto = require('crypto');
 const args = process.argv.slice(2);
 if (args[0] === 'auth' && args[1] === 'status') { console.log(JSON.stringify({ loggedIn: process.env.FAKE_LOGGED_OUT ? false : true, authMethod: 'fake' })); process.exit(0); }
@@ -62,7 +62,7 @@ async function turn(msg) {
   }
   if (text.trim() === '/compact') { // elle sıkıştırma: model yanıtı yok, num_turns 0, maliyet sayacı birikimli
     out({ type: 'system', subtype: 'status', status: 'compacting', session_id: sid });
-    await wait(delay * 2);
+    await wait(delay * 15); // gerçek CLI'de sıkıştırma birkaç saniye sürer (2.1.318: duration_ms 6326)
     out({ type: 'system', subtype: 'status', status: null, compact_result: 'success', session_id: sid });
     compactBoundary('manual', 42025, 9100);
     out({ type: 'user', session_id: sid, isReplay: true, message: { role: 'user', content: '<local-command-stdout>Compacted </local-command-stdout>' } });
@@ -75,7 +75,7 @@ async function turn(msg) {
   // Gerçek CLI gibi aynı mesaj kimliği her içerik bloğunda tekrarlanır (usage da): toplamda bir kez sayılmalı
   const mid = 'msg_' + crypto.randomUUID().slice(0, 8);
   out({ type: 'assistant', session_id: sid, message: { id: mid, model: 'claude-opus-5-5', content: [{ type: 'text', text: reply }], usage: { input_tokens: 5, cache_read_input_tokens: 42000, output_tokens: 20 } } });
-  if (process.env.FAKE_AUTOCOMPACT) { out({ type: 'system', subtype: 'status', status: 'compacting', session_id: sid }); await wait(delay); compactBoundary('auto', 168000, 21000); }
+  if (process.env.FAKE_AUTOCOMPACT || text.includes('[oto-sıkıştır]')) { out({ type: 'system', subtype: 'status', status: 'compacting', session_id: sid }); await wait(delay * 15); compactBoundary('auto', 168000, 21000); }
   // Gerçek CLI her turda kalan kullanımı bildirir
   out({ type: 'rate_limit_event', session_id: sid, rate_limit_info: { status: 'allowed', resetsAt: Math.floor(Date.now() / 1000) + 3 * 86400, rateLimitType: 'seven_day', unifiedWindows: { seven_day: { utilization: 0.73, resetsAt: Math.floor(Date.now() / 1000) + 3 * 86400 }, five_hour: { utilization: 0.2, resetsAt: Math.floor(Date.now() / 1000) + 7200 } } } });
   await wait(delay);
