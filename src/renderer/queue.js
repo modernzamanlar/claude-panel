@@ -26,8 +26,8 @@
   function takeBack(q, k, cur) {
     const it = remove(q, k);
     if (!it) return null;
-    const c = String(cur || '').trim();
-    return { text: c ? it.text + (it.text ? '\n' : '') + c : it.text || '', att: [...(it.att || [])] };
+    const c = String(cur || '').trim(), x = it.text || '';
+    return { text: x && c ? x + '\n' + c : x || c, att: [...(it.att || [])] };
   }
 
   // Satırda gösterilecek kısa metin: yazı (200 karakter) ya da eklerin adları

@@ -50,6 +50,7 @@ test('token: yalnız mesajın başındaki "/" sözcüğü; imleç ortadaysa söz
 test('fromEvent: init ve commands_changed birleşir; ilgisiz olay bilgiyi değiştirmez', () => {
   assert.strictEqual(S.fromEvent(null, null), null);
   assert.strictEqual(S.fromEvent(undefined, { type: 'assistant' }), null);
+  assert.strictEqual(S.fromEvent(null, { type: 'system', subtype: 'status' }), null);
   const a = S.fromEvent(null, INIT);
   assert.deepStrictEqual(a.names.slice(-2), ['color', '__remote-workflow'], 'metin olmayan ad atılır');
   assert.deepStrictEqual(a.terminal, ['doctor', 'color']);
@@ -119,7 +120,7 @@ test('build: commands_changed listesi birincil kaynak; kaynak etiketleri ve takm
   assert.deepStrictEqual([by['araclar:yap'].src, by['araclar:yap'].plugin, by['araclar:yap'].sec], ['plugin', 'araclar', 'cmd']);
   assert.deepStrictEqual([by.tuhaf.desc, by.tuhaf.src], ['Sonu (çok kelimeli parantez)', 'user'], 'etiket yoksa kullanıcı sayılır');
   assert.ok(!by.agents && !by.doctor && !by.color, 'denenmemiş/terminal yerleşikler yok');
-  assert.ok(!Object.keys(by).some(n => n.includes(' ')), 'MCP istemi (boşluklu ad) yok');
+  assert.ok(!l.filter(x => x.sec !== 'tpl').some(x => x.name.includes(' ')), 'MCP istemi (boşluklu ad) yok');
   assert.ok(!by['yeni-dosya'] && !by['araclar:beceri'], 'liste varken dosya taraması eklenmez');
   assert.strictEqual(by.clear.desc, 'Yeni sohbet aç (aynı klasörde)', 'yerleşik, panel açıklamasıyla');
   assert.ok(by.compact && by.context && by.usage, 'CLI listesinde adı geçen yerleşikler');
@@ -132,6 +133,8 @@ test('build: commands_changed listesi birincil kaynak; kaynak etiketleri ve takm
   const fill = S.build({ cli: { list: [{ name: 'projekomut' }, { name: 'premiere', description: '' }] }, files: FILES });
   assert.deepStrictEqual(fill.filter(x => !x.src || x.src !== 'builtin').map(x => [x.name, x.desc, x.src, x.sec]), [['projekomut', 'Dosyadan komut', 'project', 'cmd'], ['premiere', 'Dosyadan açıklama', 'user', 'skill']]);
   const long = S.build({ cli: { list: [{ name: 'uzun', description: 'x'.repeat(400) }] } }).find(x => x.name === 'uzun');
+  const bs = S.build({ cli: { skills: ['bs'], list: [{ name: 'bs', builtin: true }] } }).find(x => x.name === 'bs');
+  assert.deepStrictEqual([bs.sec, bs.src, bs.desc], ['skill', 'builtin', ''], 'açıklamasız yerleşik skill');
   assert.strictEqual(long.desc.length, 160); assert.ok(long.desc.endsWith('…'));
 });
 
@@ -143,7 +146,7 @@ test('filter: ad başı, parça başı, takma ad, içerir; bölüm sırası ve �
   assert.deepStrictEqual(names(S.filter(l, 'dur')), ['Durum özeti']);
   assert.deepStrictEqual(names(S.filter(l, 'DUR')), ['Durum özeti'], 'büyük/küçük harf duyarsız');
   assert.deepStrictEqual(names(S.filter(l, 'öze')), ['Durum özeti'], 'şablon adının ikinci kelimesi (parça başı)');
-  assert.deepStrictEqual(names(S.filter(l, 'co')), ['compact', 'context', 'config', 'code-review'].filter(n => l.some(x => x.name === n)));
+  assert.deepStrictEqual(names(S.filter(l, 'co')), ['compact', 'context', 'usage', 'code-review'], 'usage takma adı "cost" ile; ad eşleşmesinden sonra');
   assert.deepStrictEqual(names(S.filter(l, 'review')), ['code-review'], '"-" sonrası parça başı');
   assert.deepStrictEqual(names(S.filter(l, 'rese')), ['clear'], 'takma ad');
   assert.deepStrictEqual(names(S.filter(l, 'xt')), ['context'], 'içerir');

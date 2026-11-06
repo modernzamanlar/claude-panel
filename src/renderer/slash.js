@@ -75,11 +75,12 @@
     const add = it => { if (!seen.has(it.name)) { seen.add(it.name); (it.aliases || []).forEach(a => seen.add(a)); out.push(it); } };
     for (const t of opt.templates || []) if (t && t.name && t.text) out.push({ sec: 'tpl', name: t.name, desc: clip(t.text, 90), src: 'template', text: t.text });
     const term = new Set((cli && cli.terminal) || []), skills = new Set((cli && cli.skills) || []);
-    const cliNames = cli && cli.names ? new Set(cli.names) : null;
+    // CLI'nin bildirdiği adlar: init (slash_commands) ve commands_changed listesi; ikisi de yoksa null (henüz bilgi yok)
+    const cliNames = cli && (cli.names || cli.list) ? new Set([...(cli.names || []), ...(cli.list || []).map(c => c.name)]) : null;
     const fsBy = new Map(files.filter(f => f && okName(f.name)).map(f => [f.name, f]));
     // Yerleşikler: panel işlevi olanlar her zaman; CLI'ye gidenler CLI bunları bildiriyorsa (ya da henüz bilgi yoksa)
     for (const b of BUILTIN) {
-      const listed = !cliNames || b.action || [b.name, ...(b.aliases || [])].some(n => cliNames.has(n)) || (cli.list || []).some(c => c.name === b.name);
+      const listed = !cliNames || b.action || [b.name, ...(b.aliases || [])].some(n => cliNames.has(n));
       if (listed) add({ sec: 'cmd', name: b.name, desc: b.desc, src: 'builtin', ...(b.hint ? { hint: b.hint } : {}), ...(b.aliases ? { aliases: b.aliases } : {}), ...(b.action ? { action: b.action } : {}) });
     }
     if (cli && cli.list) {
