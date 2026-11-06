@@ -8,13 +8,14 @@
     "start": "electron .",
     "selftest": "electron . --selftest",
     "test": "node scripts/test.js",
-    "test:ui": "scripts/ui-test/run.sh mac && scripts/ui-test/run.sh win",
-    "dist": "electron-builder --mac dmg",
+    "test:ui": "node scripts/ui-test/run.js mac && node scripts/ui-test/run.js win",
+    "dist": "electron-builder --mac dmg zip",
     "icon": "electron build/make-icon.js",
     "dist:win": "electron-builder --win nsis --x64",
     "dist:all": "npm run dist && npm run dist:win",
     "release:win": "npm run dist:win && node scripts/release-win.js",
-    "test:cov": "node --test --experimental-test-coverage --test-coverage-include=src/main/media.js --test-coverage-include=src/renderer/complete.js --test-coverage-include=src/renderer/usage.js --test-coverage-include=src/renderer/markdown.js test/q-media.test.js test/q-complete.test.js test/q-usage.test.js test/q-markdown.test.js"
+    "release:mac": "npm run dist && node scripts/release-mac.js",
+    "test:cov": "node --test --experimental-test-coverage --test-coverage-include=src/main/media.js --test-coverage-include=src/renderer/complete.js --test-coverage-include=src/renderer/usage.js --test-coverage-include=src/renderer/markdown.js --test-coverage-include=src/renderer/annotate.js --test-coverage-include=src/main/annotate.js --test-coverage-include=src/main/macupdate.js --test-coverage-include=src/renderer/tema.js --test-coverage-include=src/renderer/mediapath.js --test-coverage-include=src/renderer/menupos.js --test-coverage-include=src/renderer/diff.js --test-coverage-include=src/renderer/changes.js --test-coverage-include=src/main/changes.js test/q-media.test.js test/q-complete.test.js test/q-usage.test.js test/q-markdown.test.js test/q-annotate.test.js test/q-annotate-main.test.js test/q-macupdate.test.js test/q-tema.test.js test/q-mediapath.test.js test/q-menupos.test.js test/q-diff.test.js test/q-changes.test.js test/q-changes-main.test.js"
   },
   "author": "",
   "license": "UNLICENSED",
@@ -42,11 +43,18 @@
           "arch": [
             "arm64"
           ]
+        },
+        {
+          "target": "zip",
+          "arch": [
+            "arm64"
+          ]
         }
       ],
       "icon": "build/icon.icns",
       "category": "public.app-category.developer-tools",
-      "identity": null,
+      "identity": "-",
+      "hardenedRuntime": false,
       "extendInfo": {
         "NSUserNotificationAlertStyle": "alert"
       }

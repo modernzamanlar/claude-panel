@@ -45,7 +45,9 @@ function make(opts = {}) {
   const spawn = fakeSpawn();
   const app = { getVersion: () => '0.2.0', quit: () => quits.push(Date.now()) };
   const settingsFile = path.join(root, 'ayar', 'settings.json');
-  const u = createUpdater({ app, settingsFile, enabled: true, publicKey: PUB, downloadDir: dl, spawn,
+  // platform: varsayılan 'linux' (Windows akışı, varsayılan kaynak yok) — testler Mac'te de, Windows'ta da aynı koşsun;
+  // Mac akışı (platform 'darwin') aşağıdaki "Mac" bölümünde
+  const u = createUpdater({ app, settingsFile, enabled: true, publicKey: PUB, downloadDir: dl, spawn, platform: 'linux',
     onState: s => { states.push(s.phase); snaps.push(s); }, ...opts });
   return { u, root, dir, dl, states, snaps, quits, spawn, settingsFile };
 }
@@ -151,7 +153,7 @@ test('etkinlik: Windows dışında ortam değişkeni yoksa kapalı; win32de veya
   assert.strictEqual((await win.u.check()).phase, 'none');
   process.env.CLAUDE_PANEL_UPDATES = '/olmayan-ortam-klasoru';
   try {
-    const env = make({ enabled: undefined, platform: 'darwin' });
+    const env = make({ enabled: undefined, platform: 'darwin', defaultSources: [] }); // Mac varsayılanları: q-updater-mac.test.js
     const st = await env.u.check({ manual: true });
     assert.strictEqual(st.phase, 'error');
     assert.deepStrictEqual(st.tried, ['/olmayan-ortam-klasoru (ENOENT)']);
@@ -456,4 +458,41 @@ test('start/stop: 15 sn sonra ve 30 dakikada bir denetler, stop sonrası durur',
   t0.mock.timers.tick(2 * 60 * 60 * 1000);
   assert.strictEqual(checks(), 2);
   assert.strictEqual(t.u.state.phase, 'none');
+});
+
+// ---------- ayarlarda gösterilen güncelleme klasörü (dirInfo) ----------
+test('dirInfo: Windows\'ta seçim yoksa varsayılan NAS klasörü seçili ve "varsayılan" işaretli', () => {
+  const { u } = make({ platform: 'win32' });
+  assert.deepStrictEqual(u.dirInfo(), { dir: DEFAULT_SOURCES[0], defaultDir: DEFAULT_SOURCES[0], isDefault: true });
+});
+test('dirInfo: kullanıcı başka klasör seçince o görünür; varsayılana dönünce yine varsayılan', () => {
+  const { u, settingsFile } = make({ platform: 'win32' });
+  u.setDir('E:\\Baska\\Exe');
+  assert.deepStrictEqual(u.dirInfo(), { dir: 'E:\\Baska\\Exe', defaultDir: DEFAULT_SOURCES[0], isDefault: false });
+  assert.strictEqual(u.sources()[0], 'E:\\Baska\\Exe');
+  u.setDir(null);                                       // "Varsayılana dön"
+  assert.deepStrictEqual(u.dirInfo(), { dir: DEFAULT_SOURCES[0], defaultDir: DEFAULT_SOURCES[0], isDefault: true });
+  assert.ok(!('updateDir' in JSON.parse(fs.readFileSync(settingsFile, 'utf8'))));
+  assert.deepStrictEqual(u.sources(), DEFAULT_SOURCES);
+});
+test('dirInfo: varsayılanın aynısını seçmek de "varsayılan" sayılır', () => {
+  const { u } = make({ platform: 'win32' });
+  u.setDir(DEFAULT_SOURCES[0]);
+  assert.deepStrictEqual(u.dirInfo(), { dir: DEFAULT_SOURCES[0], defaultDir: DEFAULT_SOURCES[0], isDefault: true });
+});
+test('dirInfo: Mac\'te varsayılan NAS klasörü (DEFAULT_SOURCES_MAC) görünür; seçilmiş klasör yine bildirilir', () => {
+  const { DEFAULT_SOURCES_MAC } = require('../src/main/updater');
+  const { u } = make({ platform: 'darwin' });
+  assert.deepStrictEqual(u.dirInfo(), { dir: DEFAULT_SOURCES_MAC[0], defaultDir: DEFAULT_SOURCES_MAC[0], isDefault: true });
+  u.setDir('/Volumes/NAS/Exe');
+  assert.deepStrictEqual(u.dirInfo(), { dir: '/Volumes/NAS/Exe', defaultDir: DEFAULT_SOURCES_MAC[0], isDefault: false });
+});
+test('dirInfo: varsayılanı olmayan platformda (linux) satır gizlenir', () => {
+  const { u } = make({ platform: 'linux' });
+  assert.deepStrictEqual(u.dirInfo(), { dir: null, defaultDir: null, isDefault: true });
+});
+test('dirInfo: bozuk ayar dosyasında varsayılana düşer', () => {
+  const { u, settingsFile } = make({ platform: 'win32' });
+  fs.mkdirSync(path.dirname(settingsFile), { recursive: true }); fs.writeFileSync(settingsFile, '{bozuk');
+  assert.deepStrictEqual(u.dirInfo(), { dir: DEFAULT_SOURCES[0], defaultDir: DEFAULT_SOURCES[0], isDefault: true });
 });

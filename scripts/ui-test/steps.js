@@ -204,7 +204,7 @@
   USAGE = {w:{seven_day:{u:0.6, resetsAt:Math.floor(NOWm/1000) + 3*86400, at:NOWm}, five_hour:{u:0.2, resetsAt:Math.floor(NOWm/1000) + 3600, at:NOWm}}, status:'allowed', at:NOWm};
   usageMenu(100, 100); res.grafik = !!document.querySelector('.menu .use-spark polyline'); res.tahmin = [...document.querySelectorAll('.menu .use-f')].map(x => x.textContent.trim()); closeMenu();
   S.info = true; renderInfo(); await W(1200); res.medya = !!document.querySelector('#info .isec h4') && document.querySelector('#info').textContent.includes('Son medya');
-  const dog = decodeURIComponent(location.pathname).replace(/index\.html$/, 'img/dog8.png');
+  const dog = decodeURIComponent(location.pathname).replace(/index\.html$/, 'img/dog8.png').replace(/^\/([A-Za-z]:)/, '$1');
   s.msgs = [...keep, {r:'a', b:[{t:'text', v:`<p><code>${dog}</code></p>`}]}]; renderPanes(); await W(50);
   const cs = p0().querySelectorAll('code.fpath'); cs[cs.length - 1].click(); await W(600);
   res.yolOnizleme = !!document.querySelector('#lb .lb-img'); document.querySelector('#lb')?.remove();

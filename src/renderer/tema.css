@@ -1,0 +1,72 @@
+/* Gece teması (varsayılan koyu, Google Antigravity masaüstü uygulamasından ölçülen tonlar).
+   Yalnız renk, yüzey, kenarlık, gölge ve degrade değişir; boyut, yer, şekil ve düzen styles.css'te kalır.
+   Görünüm html[data-look]'tan gelir (app.js applyTheme, tema.js). Eski Claude Code tonlu koyu tema styles.css'teki
+   [data-theme="dark"] değişkenleridir ve data-look="claude" iken burada hiçbir kural uygulanmaz.
+   Ölçülen değerler (referans görsel): ana zemin #070709, kenar çubuğu #111114, ayraç #1f1f22, yüzey #262629,
+   giriş kutusu #0d0d11 / #15151a, kenarlık #1e1e22, üstte mavi gece degradesi #0b1321 → #070709, ikincil metin ~#7b7b7c
+   (AA için burada daha açık: --muted #a1a1a8, --faint #84848b; ikisi de en koyu yüzeylerde ≥ 4.5:1). */
+
+/* Değişkenler. data-look yokken (app.js yüklenmeden önceki ilk kare) koyu görünüm zaten Gece olsun diye yedek seçiciler var. */
+html:root[data-look="gece"],
+html:root[data-theme="dark"]:not([data-look]){
+  --bg:#070709; --side:#111114; --panel:#0d0d10; --hover:#1c1c21; --active:#26262b; --comp:#15151a;
+  --line:#1f1f23; --line2:#2c2c32; --text:#f2f2f4; --muted:#a1a1a8; --faint:#84848b;
+  --accent:#3f72d8; --accent-soft:#16213a; --accent-text:#8fb2ff; --track:#202025;
+  --sel:#3462c4; --user:#1a1a1f; --code:#121216; --c-free:#202025; --c-gray:#8c8c93; --c-dark:#55555c;
+  --live:#6c9cf0; --ok:#5aa36a; --warn:#d49a3a;
+  --shadow:0 1px 2px rgba(0,0,0,.45),0 6px 22px rgba(0,0,0,.5);
+  --sb:rgba(240,240,246,.14); --sb-h:rgba(240,240,246,.28); --sb-a:rgba(108,156,240,.8);
+  --night:radial-gradient(ellipse 75% 300px at 50% 0, rgba(28,56,112,.30), rgba(28,56,112,0) 100%);
+  color-scheme:dark;
+}
+@media (prefers-color-scheme: dark){
+  html:root:not([data-theme]):not([data-look]){
+    --bg:#070709; --side:#111114; --panel:#0d0d10; --hover:#1c1c21; --active:#26262b; --comp:#15151a;
+    --line:#1f1f23; --line2:#2c2c32; --text:#f2f2f4; --muted:#a1a1a8; --faint:#84848b;
+    --accent:#3f72d8; --accent-soft:#16213a; --accent-text:#8fb2ff; --track:#202025;
+    --sel:#3462c4; --user:#1a1a1f; --code:#121216; --c-free:#202025; --c-gray:#8c8c93; --c-dark:#55555c;
+    --live:#6c9cf0; --ok:#5aa36a; --warn:#d49a3a;
+    --shadow:0 1px 2px rgba(0,0,0,.45),0 6px 22px rgba(0,0,0,.5);
+    --sb:rgba(240,240,246,.14); --sb-h:rgba(240,240,246,.28); --sb-a:rgba(108,156,240,.8);
+    color-scheme:dark;
+  }
+}
+
+/* Ana içerik: çok hafif mavi gece degradesi; bölmeler zeminden yalnız bir ton açık ve degradeyi hafifçe gösterir */
+:root[data-look="gece"] .main{background:var(--night),var(--bg)}
+:root[data-look="gece"] .pane{background:color-mix(in srgb,var(--panel) 88%,transparent)}
+:root[data-look="gece"] .pane.active{border-color:var(--line2)}
+:root[data-look="gece"] .fx-main{background-image:var(--night)}
+
+/* Birincil düğmeler beyaz / açık gri, koyu simge (referanstaki gönder düğmesi gibi); vurgu rengi az kullanılır */
+:root[data-look="gece"] .send:not(.busy):not(.stop),
+:root[data-look="gece"] .rail .new,
+:root[data-look="gece"] .rail .new:hover,
+:root[data-look="gece"] .btn.pri,
+:root[data-look="gece"] .btn.pri:hover,
+:root[data-look="gece"] .q-o.on,
+:root[data-look="gece"] .upd.ready{background:#ececf0;border-color:#ececf0;color:#0b0b0e}
+:root[data-look="gece"] .btn.pri .kbd{color:rgba(11,11,14,.72);border-color:rgba(11,11,14,.3)}
+:root[data-look="gece"] .send.stop{background:#2a2a30;color:#f2f2f4;box-shadow:inset 0 0 0 1px #3a3a42}
+:root[data-look="gece"] .brand .logo{background:#ececf0;color:#0b0b0e}
+:root[data-look="gece"] .pane.active .ph-num{background:#ececf0;color:#0b0b0e}
+
+/* Menü ve açılır pencereler: koyu zeminde daha belirgin gölge */
+:root[data-look="gece"] .menu{box-shadow:0 10px 34px rgba(0,0,0,.6)}
+
+/* GourceView/şema kutuları: sıcak kahve yerine nötr gri */
+:root[data-look="gece"] .db{fill:#1c1c21;stroke:#2f2f36} :root[data-look="gece"] .dc{fill:#26262c;stroke:#2f2f36} :root[data-look="gece"] .dl{stroke:#3a3a42}
+
+/* Satır içi tehlike rengi (#c0392b, app.js menüleri ve uyarıları) koyu zeminde 4.5:1'in altında kalıyordu */
+:root[data-look="gece"] [style*="color:#c0392b"]{color:#f0776a !important}
+/* Fark satırları ve çalışma hatası: kırmızı/yeşil koyu zeminde açılır (diff.js dalının .dv-* sınıfları dahil) */
+:root[data-look="gece"] .dl-del{color:#f39a90} :root[data-look="gece"] .dl-add{color:#8fd49c}
+:root[data-look="gece"] .dv-pd,:root[data-look="gece"] .dv-d .dv-s{color:#f0776a}
+:root[data-look="gece"] .a .run-err{color:#f39a90}
+
+/* ---------- Ayarlar menüsü: Tema seçimi ve güncelleme klasörü (tüm temalar) ---------- */
+.menu .tema-sw{width:12px;height:12px;border-radius:4px;border:1px solid var(--line2)}
+.menu .upd-dir{display:flex;align-items:center;gap:6px;padding:2px 9px 6px 33px;font-size:11.5px;color:var(--muted);min-width:0;max-width:100%}
+.menu .upd-dir-ok{color:var(--ok);flex:none}
+.menu .upd-dir-p{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+.menu .upd-dir-d{color:var(--faint);flex:none}

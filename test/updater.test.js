@@ -7,6 +7,8 @@ const path = require('path');
 const crypto = require('crypto');
 const { createUpdater, cmpVer, sha512, signManifest, verifyManifest } = require('../src/main/updater');
 const KP = crypto.generateKeyPairSync('ed25519');
+// platform: Windows'ta varsayılan kaynaklar gerçek NAS yollarıdır (V:…); testler yalnız kendi klasörlerini denesin
+const PLATFORM = 'linux'; // Windows akışı, varsayılan NAS kaynağı yok (darwin Mac akışını seçer)
 const PRIV = KP.privateKey.export({ type: 'pkcs8', format: 'pem' }), PUB = KP.publicKey.export({ type: 'spki', format: 'pem' });
 
 async function setup(version, { badHash = false, unsigned = false, forge = false } = {}) {
@@ -18,7 +20,7 @@ async function setup(version, { badHash = false, unsigned = false, forge = false
   if (!unsigned) m.imza = signManifest(m, forge ? crypto.generateKeyPairSync('ed25519').privateKey.export({ type: 'pkcs8', format: 'pem' }) : PRIV);
   fs.writeFileSync(path.join(dir, 'guncelleme.json'), JSON.stringify(m));
   const states = [];
-  const u = createUpdater({ app: { getVersion: () => '0.2.0', quit() {} }, settingsFile: path.join(dir, 'settings.json'), enabled: true, publicKey: PUB, onState: s => states.push(s.phase) });
+  const u = createUpdater({ app: { getVersion: () => '0.2.0', quit() {} }, settingsFile: path.join(dir, 'settings.json'), enabled: true, platform: PLATFORM, publicKey: PUB, onState: s => states.push(s.phase) });
   u.setDir(dir);
   return { u, states, dir };
 }
@@ -45,7 +47,7 @@ test('güncelleyici: bozuk dosya kurulmaz', async () => {
   assert.strictEqual(u.install(), false);
 });
 test('güncelleyici: klasöre ulaşılamazsa sessizce bekler, elle denetlemede hata gösterir', async () => {
-  const u = createUpdater({ app: { getVersion: () => '0.2.0' }, settingsFile: path.join(os.tmpdir(), 'cp-none-' + Date.now() + '.json'), enabled: true });
+  const u = createUpdater({ app: { getVersion: () => '0.2.0' }, settingsFile: path.join(os.tmpdir(), 'cp-none-' + Date.now() + '.json'), enabled: true, platform: PLATFORM });
   u.setDir('/olmayan/klasor');
   assert.strictEqual((await u.check()).phase === 'none' || true, true);
   const st = await u.check({ manual: true });

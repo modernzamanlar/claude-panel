@@ -381,7 +381,7 @@ function gDraw(){
   const cv = $('#gvCanvas'); if(!cv) return; const c = cv.getContext('2d'); const {w, h, dpr} = G; const k = G.cam.k; const P = G.pos;
   const ACC = '#d97757', WARN = '#e0a43a', TXT = 'rgba(236,233,225,.88)';
   c.setTransform(dpr,0,0,dpr,0,0);
-  const bg = c.createRadialGradient(w/2, h/2, 0, w/2, h/2, Math.max(w,h)*.7); bg.addColorStop(0,'#211f1c'); bg.addColorStop(1,'#121110');
+  const bg = c.createRadialGradient(w/2, h/2, 0, w/2, h/2, Math.max(w,h)*.7); const gece = document.documentElement.dataset.look === 'gece'; bg.addColorStop(0, gece ? '#121826' : '#211f1c'); bg.addColorStop(1, gece ? '#070709' : '#121110');
   c.fillStyle = bg; c.fillRect(0,0,w,h);
   c.save(); c.translate(w/2 + G.cam.x, h/2 + G.cam.y); c.scale(k,k);
   const focus = G.hover || (G.sel ? G.byId[G.sel] : null);
@@ -772,7 +772,8 @@ document.addEventListener('contextmenu', e => {
     <button data-m="fpshow" data-p="${esc(p)}">${ic('folder')}Klasörde göster</button>
     <button data-m="fpcopy" data-p="${esc(p)}">${ic('clip')}Yolu kopyala</button>`);
 }, true);
-const toolHTML = b => `<div class="tool ${b.err?'terr':''}"><div class="tool-h">${b.running?'<span class="spin"></span>':ic('chev','chev')}${ic(b.n==='Bash'?'term':b.n==='Read'?'file':/Write|Edit/.test(b.n)?'edit':'sliders')}<b>${esc(b.n)}</b><span class="mono">${esc(b.a)}</span>${thumbs(b.imgs, 'th-in')}</div><div class="tool-b">${esc(b.o)}</div></div>`;
+// Düzenleme araçlarında (b.d) başlıkta +N −M, açılınca renkli fark (diff.js); hata olursa araç çıktısı da altında
+const toolHTML = b => { const dv = diffView.html(b.d); return `<div class="tool ${b.err?'terr':''}"><div class="tool-h">${b.running?'<span class="spin"></span>':ic('chev','chev')}${ic(b.n==='Bash'?'term':b.n==='Read'?'file':/Write|Edit/.test(b.n)?'edit':'sliders')}<b>${esc(b.n)}</b><span class="mono">${esc(b.a)}</span>${dv ? dv.badge : ''}${thumbs(b.imgs, 'th-in')}</div><div class="tool-b${dv ? ' dv-b' : ''}">${dv ? dv.html + (b.err && b.o ? `<div class="dv-o">${esc(b.o)}</div>` : '') : esc(b.o)}</div></div>`; };
 // Art arda gelen araç çağrıları tek satırda toplanır ("7 araç · browser_batch ×6, Bash"); tıklayınca açılır. Açık olanlar yeniden çizimde açık kalır.
 const TGOPEN = new Set();
 const toolShort = n => n.replace(/^.*·\s*/, '');
@@ -989,7 +990,7 @@ function renderInfo(){
       ${!S.connOpen ? '' : `<div class="conn-list">${connRows(s, conns)}<button class="act" data-mcpcheck style="margin-top:6px;font-size:12px">${S.mcpCheck && S.mcpCheck.loading ? 'Kontrol ediliyor…' : 'Durumu şimdi kontrol et'}</button></div>`}
     </div>
     ${mediaSection(s)}
-    <div class="isec"><h4>Çıktılar</h4>
+    <div class="isec"><h4>Çıktılar <button class="act cx-open" data-cxopen="${s.id}" title="Bu sohbette değişen dosyalar, fark ve geri alma">Değişen dosyalar</button></h4>
       ${s.outputs.length ? s.outputs.map(o=>`<div class="irow">${ic(/\.html?$/.test(o)?'globe':/\.(md|txt|docx)$/.test(o)?'note':'file')}<span class="lbl" title="${esc(o)}">${esc(o.split(/[\\/]/).pop())}</span><span class="ok mono odir">${esc(/[\\/]/.test(o)?o.split(/[\\/]/).slice(0,-1).join('/'):'')}</span></div>`).join('') : '<div style="color:var(--faint);font-size:12.5px">Bu oturumda henüz dosya oluşturulmadı.</div>'}
     </div>`;
 }
@@ -1132,16 +1133,40 @@ function startChat(){
 /* ---------- Context menus ---------- */
 function m_updatePickCount(){ const l = document.querySelectorAll('#nf .fl span')[1]; if(l) l.textContent = '· '+NF.picked.size+' seçili'; }
 function closeMenu(){ document.querySelector('.menu')?.remove(); }
-function menu(x, y, html){
+// anchor {el, side, align}: menü düğmeye hizalı açılır (menupos.js), pencere boyutu değişince / kaydırılınca yeniden yerleşir
+function menu(x, y, html, anchor){
   closeMenu(); const m = document.createElement('div'); m.className='menu'; m.innerHTML=html;
   // Windows'ta üst 44 px pencere düğmelerine (— □ ×) ve sürükleme alanına ait: menü oraya taşmaz
   const top0 = IS_MAC ? 8 : 52; m.style.maxHeight = (innerHeight - top0 - 8) + 'px';
   document.body.appendChild(m);
-  const r = m.getBoundingClientRect();
-  m.style.left = Math.max(8, Math.min(x, innerWidth-r.width-8))+'px'; m.style.top = Math.max(top0, Math.min(y, innerHeight-r.height-8))+'px';
+  if(anchor && anchor.el){ m._anchor = {...anchor, sel: anchorSel(anchor.el)}; placeMenu(m); }
+  else { const r = m.getBoundingClientRect();
+  m.style.left = Math.max(8, Math.min(x, innerWidth-r.width-8))+'px'; m.style.top = Math.max(top0, Math.min(y, innerHeight-r.height-8))+'px'; }
   const cur = m.querySelector('.m-scroll [data-cur]'); if(cur) cur.scrollIntoView({block:'nearest'});
   const q = m.querySelector('.m-q'); if(q) q.focus({preventScroll:true});
 }
+// Düğme yeniden çizilirse (setSlot) aynı bölmedeki yeni düğmeyi bulmak için seçici
+function anchorSel(el){
+  const at = [...el.attributes].find(a => a.name.startsWith('data-')); if(!at) return null;
+  const pane = el.closest('section[data-pane]');
+  return (pane ? `section[data-pane="${pane.dataset.pane}"] ` : '') + `[${at.name}${at.value ? `="${CSS.escape(at.value)}"` : ''}]`;
+}
+function placeMenu(m){
+  const A = m._anchor;
+  if(!A.el.isConnected){ const n = A.sel && document.querySelector(A.sel); if(!n) return false; A.el = n; }
+  const a = A.el.getBoundingClientRect(); if(!a.width && !a.height) return false;
+  const pane = A.el.closest('.pane'), b = pane && pane.getBoundingClientRect();
+  const top0 = IS_MAC ? 8 : 52, view = {width: innerWidth, height: innerHeight};
+  // Yatay hizalama verilmediyse: bölmenin sağ yarısındaki düğmede menü sağ kenara, sol yarısındakinde sol kenara hizalanır
+  const o = {side: A.side || 'above', align: A.align || (b && a.left + a.width / 2 > b.left + b.width / 2 ? 'end' : 'start'), top: top0, bounds: b ? {left: b.left, right: b.right} : null};
+  m.style.maxHeight = (innerHeight - top0 - 8) + 'px';
+  let r = m.getBoundingClientRect(), p = menuPos.place(a, r, view, o);
+  if(r.height > p.maxHeight){ m.style.maxHeight = p.maxHeight + 'px'; r = m.getBoundingClientRect(); p = menuPos.place(a, r, view, o); }
+  m.style.left = p.x + 'px'; m.style.top = p.y + 'px'; m.dataset.side = p.side;
+  return true;
+}
+addEventListener('resize', () => { const m = document.querySelector('.menu'); if(m && m._anchor && !placeMenu(m)) closeMenu(); });
+document.addEventListener('scroll', e => { const m = document.querySelector('.menu'); if(m && m._anchor && !m.contains(e.target) && !placeMenu(m)) closeMenu(); }, true);
 // Boş bölmedeki sohbet arama: yerinde süzer; boşken son 6 sohbet, yazınca eşleşen ilk 30
 function filterPanePick(inp){
   const q = trNorm(inp.value.trim()), box = inp.parentElement.querySelector('.recent'); let n = 0;
@@ -1166,6 +1191,7 @@ function sessMenu(id, x, y){
     <button data-m="pin" data-id="${id}">${ic('pin')}${s.pinned?'Sabitlemeyi kaldır':'Sabitle'}</button>
     <button data-m="ext" data-id="${id}">${ic('ext')}Proje klasörünü aç</button>
     <button data-m="ql" data-id="${id}">${ic('search')}Önizle (Boşluk)</button>
+    <button data-m="changes" data-id="${id}">${ic('edit')}Değişen dosyalar</button>
     <button data-m="movedlg" data-id="${id}">${ic('folder')}Taşı…</button>
     <hr><button data-m="trash" data-id="${id}" style="color:#c0392b">${ic('trash')}Çöp Kutusuna taşı</button>`);
 }
@@ -1187,10 +1213,12 @@ function folderMenu(fid, x, y){
 document.addEventListener('click', e => {
   const t = e.target;
   const m = t.closest('.menu [data-m]');
+  if(m && m.dataset.m==='tema'){ closeMenu(); WS.prefs = Tema.choose(WS.prefs, m.dataset.v); applyTheme(WS.prefs); persist(); return; }
+  if(m && m.dataset.m==='upddef'){ closeMenu(); API.update.resetDir().then(st => { UPD = st; if(st.dirInfo) UPDDIR = st.dirInfo; paintUpd(); updToast(st, true); }); return; }
   if(m && /^(updcheck|upddir|updgo|mirroropen|helpdlg|fontdlg)$/.test(m.dataset.m)){ const k = m.dataset.m; closeMenu();
     if(k==='fontdlg') openFonts();
     if(k==='updcheck') updCheck();
-    if(k==='upddir') API.update.pickDir().then(st => { if(st){ UPD = st; paintUpd(); updToast(st, true); } });
+    if(k==='upddir') API.update.pickDir().then(st => { if(st){ UPD = st; if(st.dirInfo) UPDDIR = st.dirInfo; paintUpd(); updToast(st, true); } });
     if(k==='updgo') updateClick();
     if(k==='mirroropen') API.mirror.open().then(ok => ok || toast('Klasör açılamadı'));
     if(k==='helpdlg') showHelp();
@@ -1225,6 +1253,7 @@ document.addEventListener('click', e => {
     if(d.m==='cut'){ FX.clip = [...FX.sel]; renderBoard(); toast(`${FX.clip.length} öğe kesildi · hedef klasörde ⌘V`); }
     if(d.m==='withsel'){ closeMenu(); openNewFolder(curFolder(), [...FX.sel]); return; }
     if(d.m==='ql'){ closeMenu(); quickLook(d.id); return; }
+    if(d.m==='changes'){ closeMenu(); const cs = sess(d.id); if(cs) changesUI.open(cs.uuid, cs.title); return; } // oturumun toplu farkı (changes-ui.js)
     if(d.m==='bgchat'){ closeMenu(); newChat(d.f ? {group:d.f} : {}); return; }
     if(d.m==='bgfolder'){ closeMenu(); openNewFolder(d.f || null); return; }
     if(d.m==='bgpaste'){ closeMenu(); const c = FX.clip; FX.clip = null; if(c) moveInto(c, FX.cwd); return; }
@@ -1329,21 +1358,22 @@ document.addEventListener('click', e => {
     R.answers[q.question] = qaB.dataset.multi ? (cur.includes(qaB.dataset.label) ? cur.filter(x => x !== qaB.dataset.label) : [...cur, qaB.dataset.label]) : [qaB.dataset.label];
     renderPanes(); return; }
   const at = t.closest('[data-attach]'); if(at){ pickAttachments(+at.dataset.attach); return; }
+  const an = t.closest('[data-annot]'); if(an){ openAnnotate(sess(an.dataset.sid), +an.dataset.annot); return; }
   const ua = t.closest('[data-unattach]'); if(ua){ const s = sess(ua.dataset.sid); s.attach.splice(+ua.dataset.unattach, 1); renderPanes(); return; }
   if(t.closest('[data-mcpcheck]')){ const s = sess(S.panes[S.active]); if(s) checkConnectors(s); return; }
   if(t.closest('[data-login]')){ API.claude.login(); toast('Terminal açıldı: girişi tarayıcıda tamamla, sonra "Tekrar kontrol et"'); let n = 0; const iv = setInterval(async () => { n++; const a = await checkAuth(); if(a.loggedIn || n > 40){ clearInterval(iv); if(a.loggedIn) toast('Giriş tamam — artık panelden yazabilirsin'); } }, 3000); return; }
   if(t.closest('[data-authcheck]')){ checkAuth().then(a => toast(a.loggedIn ? 'Giriş tamam' : 'Hâlâ giriş yapılmamış')); return; }
-  const pm = t.closest('[data-pmode]'); if(pm){ const r = pm.getBoundingClientRect(); const s = sess(pm.dataset.pmode); menu(r.left, r.top - 200, `<div class="mh">İzin modu</div>${PMODES.map(([k,l]) => `<button data-m="pmode" data-id="${s.id}" data-v="${k}">${pmodeOf(s)===k?'✓ ':'&nbsp;&nbsp;&nbsp;'}${l}</button>`).join('')}`); return; }
+  const pm = t.closest('[data-pmode]'); if(pm){ const r = pm.getBoundingClientRect(); const s = sess(pm.dataset.pmode); menu(r.left, r.top - 200, `<div class="mh">İzin modu</div>${PMODES.map(([k,l]) => `<button data-m="pmode" data-id="${s.id}" data-v="${k}">${pmodeOf(s)===k?'✓ ':'&nbsp;&nbsp;&nbsp;'}${l}</button>`).join('')}`, {el: pm}); return; }
   const ctl = t.closest('[data-control]'); if(ctl){ const s = sess(ctl.dataset.control); const on = !controlOf(s);
     if(on && !CTRL.desktop){ const r = ctl.getBoundingClientRect();
       menu(r.left, r.top - 150, `<div class="mh">Masaüstü kontrolü için agent-desktop gerekli</div>
         <button data-m="ctlinstall" data-id="${s.id}">${ic('plus')}agent-desktop'ı kur ve aç (npm, ~1 dk)</button>
-        <button data-m="ctlbrowser" data-id="${s.id}">${ic('ext')}Yalnızca tarayıcıyla aç (Chrome)</button>`); return; }
+        <button data-m="ctlbrowser" data-id="${s.id}">${ic('ext')}Yalnızca tarayıcıyla aç (Chrome)</button>`, {el: ctl}); return; }
     setControl(s, on); return; }
-  const us = t.closest('[data-usage]'); if(us){ const r = us.getBoundingClientRect(); usageMenu(r.left - 80, r.top - 330); return; }
+  const us = t.closest('[data-usage]'); if(us){ const r = us.getBoundingClientRect(); usageMenu(r.left - 80, r.top - 330, {el: us}); return; }
   const eff = t.closest('[data-effort]'); if(eff){ const r = eff.getBoundingClientRect(); const s = sess(eff.dataset.effort); const cur = effortOf(s);
-    menu(r.left - 40, r.top - 236, `<div class="mh">Düşünme seviyesi</div>${EFFORTS.map(([k,l,d]) => `<button data-m="effort" data-id="${s.id}" data-v="${k||''}" title="${esc(d)}">${cur===k?'✓ ':'&nbsp;&nbsp;&nbsp;'}${l}</button>`).join('')}`); return; }
-  const mdl = t.closest('[data-model]'); if(mdl){ const r = mdl.getBoundingClientRect(); const s = sess(mdl.dataset.model); menu(r.left - 60, r.top - 160, `<div class="mh">Model</div>${MODELS.map(([k,l]) => `<button data-m="model" data-id="${s.id}" data-v="${k||''}">${(s.modelPick||null)===k?'✓ ':'&nbsp;&nbsp;&nbsp;'}${l}${k?'':' · '+esc(s.model)}</button>`).join('')}`); return; }
+    menu(r.left - 40, r.top - 236, `<div class="mh">Düşünme seviyesi</div>${EFFORTS.map(([k,l,d]) => `<button data-m="effort" data-id="${s.id}" data-v="${k||''}" title="${esc(d)}">${cur===k?'✓ ':'&nbsp;&nbsp;&nbsp;'}${l}</button>`).join('')}`, {el: eff}); return; }
+  const mdl = t.closest('[data-model]'); if(mdl){ const r = mdl.getBoundingClientRect(); const s = sess(mdl.dataset.model); menu(r.left - 60, r.top - 160, `<div class="mh">Model</div>${MODELS.map(([k,l]) => `<button data-m="model" data-id="${s.id}" data-v="${k||''}">${(s.modelPick||null)===k?'✓ ':'&nbsp;&nbsp;&nbsp;'}${l}${k?'':' · '+esc(s.model)}</button>`).join('')}`, {el: mdl}); return; }
   const rpl = t.closest('[data-reply]'); if(rpl){ const s = sess(rpl.dataset.sid), i = S.panes.indexOf(s && s.id); const ta = i >= 0 && document.querySelector(`[data-ta="${i}"]`);
     if(ta){ ta.value = rpl.dataset.reply; s.inputDraft = ta.value; send(i); } else toast('Önce sohbeti bir bölmede aç'); return; }
   const fsd = t.closest('[data-fsend]'); if(fsd){ const i = +fsd.dataset.i, fs = sess(S.panes[i]); if(fs) fs.askFork = false; send(i, fsd.dataset.fsend === 'fork' ? {fork:true} : {force:true}); return; }
@@ -1352,8 +1382,9 @@ document.addEventListener('click', e => {
   const qc = t.closest('[data-qclear]'); if(qc){ const s = sess(qc.dataset.qclear); if(s){ s.queue = []; s.queuePaused = false; renderPanes(); } return; }
   const qr = t.closest('[data-qresume]'); if(qr){ const s = sess(qr.dataset.qresume); if(s){ s.queuePaused = false; renderPanes(); runQueue(s); } return; }
   const mc = t.closest('[data-mic]'); if(mc){ dictate(+mc.dataset.mic); return; }
-  const tp = t.closest('[data-tpl]'); if(tp){ const r = tp.getBoundingClientRect(); tplMenu(+tp.dataset.tpl, r.left, r.top - 60 - templates().length * 32); return; }
+  const tp = t.closest('[data-tpl]'); if(tp){ const r = tp.getBoundingClientRect(); tplMenu(+tp.dataset.tpl, r.left, r.top - 60 - templates().length * 32, {el: tp}); return; }
   const swp = t.closest('[data-swap]'); if(swp){ S.active = +swp.dataset.swap; SR.q = ''; const sq = $('#sq'); if(sq) sq.value = ''; renderRail(); setSearch(true); return; }
+  const cxo = t.closest('[data-cxopen]'); if(cxo){ const cs = sess(cxo.dataset.cxopen); if(cs) changesUI.open(cs.uuid, cs.title); return; }
   const mo = t.closest('[data-more]'); if(mo){ const r = mo.getBoundingClientRect(); sessMenu(mo.dataset.more, r.left-160, r.bottom+4); return; }
   if(t.closest('[data-watch]')){ toast('Salt okuma modunda canlı izleniyor'); return; }
   const fk = t.closest('[data-fork]'); if(fk){
@@ -1361,12 +1392,11 @@ document.addEventListener('click', e => {
     S.sessions.push({...s, id, title:s.title+' (çatal)', status:'idle', ago:'şimdi', msgs:[...s.msgs], pinned:false, remote:false}); S.items.splice(S.items.indexOf(s.id)+1,0,id);
     openIn(id); toast('Oturum çatallandı'); return;
   }
-  if(t.closest('#btnSettings')){ const r = t.closest('#btnSettings').getBoundingClientRect(); settingsMenu(r.right + 6, r.bottom - 260); return; }
+  if(t.closest('#btnSettings')){ const r = t.closest('#btnSettings').getBoundingClientRect(); settingsMenu(r.right + 6, r.bottom - 260, {el: t.closest('#btnSettings'), side: 'right', align: 'end'}); return; }
   if(t.closest('#btnUpd')){ updateClick(); return; }
   if(t.closest('#btnSync')){ syncNow(); return; }
   if(t.closest('#btnTheme')){
-    const next = isDarkTheme() ? 'light' : 'dark';
-    applyTheme(next); WS.prefs = {...(WS.prefs||{}), theme:next}; persist(); return;
+    WS.prefs = Tema.toggle(WS.prefs, isDarkTheme()); applyTheme(WS.prefs); persist(); return;
   }
   const pane = t.closest('.pane'); if(pane){ const i=+pane.dataset.pane; if(i!==S.active){ S.active=i; document.querySelectorAll('.pane').forEach(p=>p.classList.toggle('active', +p.dataset.pane===i)); renderRail(); renderInfo(); } }
 });
@@ -1744,17 +1774,21 @@ function onChanged(payload){
 // Tema: data-theme yoksa sistem temasını izler (CSS prefers-color-scheme). Koyu mu, rengine bakarak değil buradan anlaşılır
 // (eskiden --bg rengiyle karşılaştırılıyordu; koyu temanın rengi değişince düğme hep "koyu"ya basıyordu).
 const isDarkTheme = () => { const t = document.documentElement.dataset.theme; return t ? t === 'dark' : matchMedia('(prefers-color-scheme: dark)').matches; };
-function applyTheme(t){
-  if(t === 'dark' || t === 'light') document.documentElement.dataset.theme = t; else delete document.documentElement.dataset.theme;
-  try { API.setTheme(isDarkTheme()); } catch {}
+// prefs (WS.prefs): theme + palette → data-theme (açık/koyu) ve data-look (gece | claude | light; renk takımı, tema.css). Ayrıntı ve göç: tema.js
+function applyTheme(prefs){
+  const r = Tema.resolve(prefs, matchMedia('(prefers-color-scheme: dark)').matches), el = document.documentElement;
+  if(r.attr) el.dataset.theme = r.attr; else delete el.dataset.theme;
+  el.dataset.look = r.look;
+  try { API.setTheme(isDarkTheme(), r.look); } catch {}
 }
-matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => { if(!document.documentElement.dataset.theme) try { API.setTheme(isDarkTheme()); } catch {} });
+applyTheme(null); // kayıt yüklenene kadar varsayılan görünüm (eski koyu tema bir an görünmesin)
+matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => { if(!document.documentElement.dataset.theme) applyTheme(WS && WS.prefs); });
 
 async function boot(){
   WS = await API.workspace.load();
   // Eski sürümler hiç seçilmemiş yazı tipini de boş ('Sistem') olarak kaydediyordu: bilerek seçilmemişse yeni varsayılan geçerli
   const pf = WS.prefs && WS.prefs.fonts; if(pf && (WS.prefs.fontsV === 2 || Object.values(pf).some(Boolean))) Object.assign(FONT, pf); applyFonts();
-  applyTheme((WS.prefs && WS.prefs.theme) || null);
+  applyTheme(WS.prefs);
   if(WS.prefs && SORTS.some(([k]) => k === WS.prefs.sort)) FX.sort = WS.prefs.sort;
   if(WS.prefs && WS.prefs.usage && WS.prefs.usage.w) USAGE = WS.prefs.usage;
   S.side = !(WS.prefs && WS.prefs.side === false); // Sohbetler penceresinin kenar çubuğu varsayılan açık; kullanıcı kapatırsa öyle kalır
@@ -1985,7 +2019,7 @@ function usageTrend(w){
   return `${pts.includes(' ') ? `<svg class="use-spark" viewBox="0 0 240 34" preserveAspectRatio="none"><line x1="0" y1="0.5" x2="240" y2="0.5"/><polyline points="${pts}"/></svg>` : ''}
     <div class="use-s use-f ${f && f.beforeReset && f.eta ? 'warn' : ''}">${esc(tip)}</div>`;
 }
-function usageMenu(x, y){
+function usageMenu(x, y, anchor){
   const ws = usageWins();
   const ago = USAGE ? Math.round((Date.now() - USAGE.at) / 6e4) : 0;
   menu(x, y, `<div class="mh">Kalan kullanım</div>${ws.length ? ws.map(w => { const pct = Math.round(w.u * 100), lvl = pct >= 90 ? 'hot' : pct >= 75 ? 'warm' : '';
@@ -1993,7 +2027,7 @@ function usageMenu(x, y){
       <div class="use-s">%${pct} kullanıldı${w.reset ? ' · sıfırlandı' : w.resetsAt ? ' · sıfırlanma ' + esc(fmtReset(w.resetsAt)) : ''}</div>${usageTrend(w)}</div>`; }).join('')
     : '<div class="use-s" style="padding:4px 9px 8px">Henüz bilgi yok: ilk yanıttan sonra Claude Code kalan kullanımı bildirir.</div>'}
     ${blocked() ? `<div class="use-s" style="padding:2px 9px;color:#c0392b">Limit doldu · ${esc(fmtReset(USAGE.resetsAt))} açılır</div>` : ''}
-    ${USAGE ? `<div class="use-s" style="padding:6px 9px 4px;border-top:1px solid var(--line);margin-top:4px">Son güncelleme: ${ago < 1 ? 'az önce' : ago < 60 ? ago + ' dk önce' : Math.round(ago / 60) + ' sa önce'} · her yanıttan sonra yenilenir</div>` : ''}`);
+    ${USAGE ? `<div class="use-s" style="padding:6px 9px 4px;border-top:1px solid var(--line);margin-top:4px">Son güncelleme: ${ago < 1 ? 'az önce' : ago < 60 ? ago + ' dk önce' : Math.round(ago / 60) + ' sa önce'} · her yanıttan sonra yenilenir</div>` : ''}`, anchor);
 }
 
 function onRun(p){
@@ -2019,7 +2053,7 @@ function onRun(p){
     if(ev.type === 'assistant' && ev.message){
       for(const c of ev.message.content || []){
         if(c.type === 'text' && c.text && c.text.trim()){ L.b.push({t:'text', v:md(c.text)}); L.draft = ''; }
-        else if(c.type === 'tool_use'){ const tool = {t:'tool', n:shortTool(c.name), a:toolSum(c.input), o:'', running:true, ...(turnCard(c.name, c.input) || {})}; L.b.push(tool); R.tools.set(c.id, tool);
+        else if(c.type === 'tool_use'){ const tool = {t:'tool', n:shortTool(c.name), a:toolSum(c.input), o:'', running:true, ...(turnCard(c.name, c.input) || {})}; const dd = diffView.data(c.name, c.input); if(dd) tool.d = dd; L.b.push(tool); R.tools.set(c.id, tool);
           const fp = c.input && (c.input.file_path || c.input.notebook_path); if(fp && /^(Write|Edit|MultiEdit|NotebookEdit)$/.test(c.name) && !s.outputs.includes(fp)) s.outputs.unshift(fp); }
       }
       const u = ev.message.usage; if(u && ev.message.model !== '<synthetic>') s.ctx = ((u.input_tokens||0) + (u.cache_read_input_tokens||0) + (u.cache_creation_input_tokens||0) + (u.output_tokens||0)) / 1000;
@@ -2202,10 +2236,10 @@ function insertTemplate(i, text){
   ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length); autosize(ta);
   const s = sess(S.panes[i]); if(s) s.inputDraft = ta.value; updateGhost(ta);
 }
-function tplMenu(i, x, y){
+function tplMenu(i, x, y, anchor){
   const ta = document.querySelector(`[data-ta="${i}"]`), cur = ta && ta.value.trim();
   menu(x, y, `<div class="mh">Şablonlar · yazarken / ile de açılır</div>${templates().map((t, k) => `<button data-m="tplins" data-i="${i}" data-k="${k}" title="${esc(t.text)}">${ic('bolt')}<span>${esc(t.name)}</span></button>`).join('')}
-    <hr>${cur ? `<button data-m="tplsave" data-i="${i}">${ic('plus')}Yazdığımı şablon yap</button>` : ''}<button data-m="tpledit">${ic('edit')}Şablonları düzenle…</button>`);
+    <hr>${cur ? `<button data-m="tplsave" data-i="${i}">${ic('plus')}Yazdığımı şablon yap</button>` : ''}<button data-m="tpledit">${ic('edit')}Şablonları düzenle…</button>`, anchor);
 }
 function saveTemplates(list){ WS.prefs = {...(WS.prefs||{}), templates: list}; GSRC.k = ''; persist(); }
 function openTemplates(){
@@ -2262,7 +2296,7 @@ window.addEventListener('focus', () => { paintBadge(); renderRail(); if(S.org) r
 /* ---------- Faz 3: dosya / görsel ekleme ---------- */
 function attachChips(s){
   const a = s.attach || []; if(!a.length) return '';
-  return `<div class="att">${a.map((x, k) => `<span class="att-c" title="${esc(x.path || x.name)}">${x.isImage ? `<img src="data:${x.media_type};base64,${x.data}" alt="">` : ic(MEDIA_VID.test(x.name) ? 'video' : MEDIA_AUD.test(x.name) ? 'music' : 'file')}<span>${esc(x.name)}</span><button data-unattach="${k}" data-sid="${s.id}">${ic('x')}</button></span>`).join('')}</div>`;
+  return `<div class="att">${a.map((x, k) => `<span class="att-c" title="${esc(x.path || x.name)}">${x.isImage ? `<img src="data:${x.media_type};base64,${x.data}" alt="" data-annot="${k}" data-sid="${s.id}">` : ic(MEDIA_VID.test(x.name) ? 'video' : MEDIA_AUD.test(x.name) ? 'music' : 'file')}<span>${esc(x.name)}</span>${x.isImage ? `<button data-annot="${k}" data-sid="${s.id}" title="Çiz" aria-label="Çiz">${ic('edit')}</button>` : ''}<button data-unattach="${k}" data-sid="${s.id}">${ic('x')}</button></span>`).join('')}</div>`;
 }
 function addAttachments(s, items){
   if(!s || !items || !items.length) return;
@@ -2273,6 +2307,11 @@ function addAttachments(s, items){
   const big = items.filter(i => !i.isImage && /\.(png|jpe?g|gif|webp)$/i.test(i.name));
   if(big.length) toast('5 MB üstü görseller dosya yolu olarak eklendi');
   renderPanes();
+}
+// Ekteki görselin üzerine çiz (annotate-ui.js): kaydedilince ek, yeni PNG dosyasıyla değişir; orijinale dokunulmaz
+function openAnnotate(s, k){
+  const it = s && s.attach && s.attach[k]; if(!it || !it.isImage || !window.annotUI) return;
+  annotUI.open(it, {toast, save: API.fs.saveAnnotated, done: nw => { const j = (s.attach || []).indexOf(it); if(j >= 0){ s.attach[j] = nw; renderPanes(); } else addAttachments(s, [nw]); }});
 }
 async function pickAttachments(i){ const s = sess(S.panes[i]); if(!s) return; addAttachments(s, await API.fs.pickFiles(s.cwd || s.project)); }
 document.addEventListener('dragover', e => { const c = e.target.closest && e.target.closest('.comp'); if(c && e.dataTransfer && [...e.dataTransfer.types].includes('Files')){ e.preventDefault(); c.classList.add('dropfile'); } });
@@ -2386,7 +2425,7 @@ if(!IS_MAC){
   new MutationObserver(ms => { for(const m of ms){ if(m.type === 'characterData') walk(m.target); else if(m.type === 'attributes') walk(m.target); else m.addedNodes.forEach(walk); } })
     .observe(document.body, { subtree:true, childList:true, characterData:true, attributes:true, attributeFilter:['title'] });
   // Açılışta pencere düğmelerini temaya göre renklendir
-  try { API.setTheme(isDarkTheme()); } catch {}
+  try { API.setTheme(isDarkTheme(), document.documentElement.dataset.look); } catch {}
 }
 
 
@@ -2409,13 +2448,9 @@ function mediaCands(text, out){
   if(!text) return;
   for(const rx of MEDIA_RX){ rx.lastIndex = 0; for(const m of text.matchAll(rx)){ const c = (m[1] || m[0]).trim().replace(/^file:\/\//, ''); if(c) out.add(c); } }
 }
-function mediaAbs(c, cwd){
-  if(/^https?:/i.test(c)) return c;
-  if(/^(~|\/|[A-Za-z]:[\\/])/.test(c)) return c;
-  if(/\s/.test(c) || !cwd) return null;                 // boşluklu göreli metin büyük olasılıkla komuttur
-  const win = /^[A-Za-z]:\\/.test(cwd);
-  return cwd.replace(/[\\/]+$/, '') + (win ? '\\' : '/') + c.replace(/^\.[\\/]/, '');
-}
+// Yol çözme ve tekilleştirme mediapath.js'te: aynı dosyanın farklı yazımları (göreli / mutlak, / ile \, ~, harf büyüklüğü,
+// sondaki noktalama) tek anahtara iner, böylece her medya mesaj başına bir kez gösterilir.
+const HOME = API.home || '';
 const IEXT = 'png|jpe?g|gif|webp';
 const IMG_TXT_RX = [
   new RegExp(`[\`"“']([^\`"“”'\\n]{1,400}?\\.(?:${IEXT}))[\`"”']`, 'gi'),
@@ -2432,8 +2467,7 @@ function imgList(s, m){
     const txt = decodeEnt(b.v.replace(/<img[^>]*>/g, ' ').replace(/<code>([\s\S]*?)<\/code>/g, '`$1`').replace(/<br>|<\/(p|li|h\d|div|tr|blockquote)>/g, '\n').replace(/<[^>]+>/g, ' '));
     for(const rx of IMG_TXT_RX){ rx.lastIndex = 0; for(const x of txt.matchAll(rx)) set.add(x[1].trim().replace(/^file:\/\//, '')); }
   }
-  const cwd = s.cwd || s.project, list = [];
-  for(const c of set){ const a = mediaAbs(c, cwd); if(!a || /^https?:/i.test(a) || shown.has(a) || list.includes(a)) continue; list.push(a); if(list.length >= 6) break; }
+  const list = mediaPath.uniq(set, {cwd: s.cwd || s.project, home: HOME, skip: shown, web: false});
   IMG_MEMO.set(m, {sig, list}); return list;
 }
 const imgsHTML = (s, m) => { const l = imgList(s, m); return l.length ? `<div class="img-list">${l.map(p => `<img class="md-img" src="${esc(mediaSrc(p))}" data-mdimg="${esc(p)}" title="${esc(p)}" alt="" loading="lazy">`).join('')}</div>` : ''; };
@@ -2451,9 +2485,7 @@ function mediaList(s, m){
       mediaCands(decodeEnt(html.replace(/<code>[\s\S]*?<\/code>/g, ' ').replace(/<br>|<\/(p|li|h\d|div|tr|blockquote)>/g, '\n').replace(/<[^>]+>/g, ' ')), set);
     } else { mediaCands(b.a, set); mediaCands(b.o, set); }
   }
-  const cwd = s.cwd || s.project;
-  const seen = new Set(), list = [];
-  for(const c of set){ const a = mediaAbs(c, cwd); if(!a || seen.has(a)) continue; seen.add(a); list.push(a); if(list.length >= 6) break; }
+  const list = mediaPath.uniq(set, {cwd: s.cwd || s.project, home: HOME});
   MEDIA_MEMO.set(m, {sig, list});
   return list;
 }
@@ -2473,9 +2505,11 @@ const MEDIA_CACHE = new Map(), REMOTE_OK = new Set();
 const fmtDur = t => { if(!isFinite(t)) return ''; t = Math.round(t); const h = Math.floor(t/3600), mm = Math.floor(t%3600/60), ss = String(t%60).padStart(2,'0'); return h ? `${h}:${String(mm).padStart(2,'0')}:${ss}` : `${mm}:${ss}`; };
 function mediaMeta(el){ return [fmtDur(el.duration), el.videoWidth ? `${el.videoWidth}×${el.videoHeight}` : ''].filter(Boolean).join(' · '); }
 function showMedia(el){
-  const box = el.closest('.media'); if(!box || box.classList.contains('ok')) return;
+  const box = el.closest('.media'); if(!box || (box.classList.contains('ok') && !box.classList.contains('load'))) return;
   const sc = box.closest('.msgs'); const atBottom = sc && sc.scrollHeight - sc.scrollTop - sc.clientHeight < 80;
-  box.classList.add('ok'); box.querySelector('.media-meta').textContent = mediaMeta(el);
+  // Oynatıcı kutusu videonun kendi oranına oturur (styles.css .media.mv --ar): dikey video dar ve uzun, siyah boşluk kalmaz
+  if(el.videoWidth && el.videoHeight) box.style.setProperty('--ar', el.videoWidth + '/' + el.videoHeight);
+  box.classList.remove('load'); box.classList.add('ok'); box.querySelector('.media-meta').textContent = mediaMeta(el);
   if(atBottom) sc.scrollTop = sc.scrollHeight;
 }
 function hydrateMedia(root, prefix = ''){
@@ -2489,6 +2523,10 @@ function hydrateMedia(root, prefix = ''){
         box.querySelector('.media-el').innerHTML = `<button class="media-load" data-mload data-mpre="${esc(prefix)}">${ic(box.dataset.mkind==='v'?'video':'music')}<span>Uzak medya · <b>${esc(host)}</b><br><span>Yüklemek için tıkla — tıklayana kadar bu adrese istek gönderilmez</span></span></button>`; }
       return;
     }
+    // Bu kutu yamada yerinde kaldıysa oynatıcısı zaten içindedir: ikinci bir oynatıcı ekleme (kök neden: hydrateMedia
+    // bütün bölmeyi tarar, önbellekteki öğe bu kutuda bağlı olduğu için "başka yerde" sanılıp her yamada yenisi ekleniyordu)
+    const own = box.querySelector('.media-el > video, .media-el > audio');
+    if(own){ if(own._fail) box.remove(); else if(own._ok) showMedia(own); return; }
     let el = MEDIA_CACHE.get(key);
     if(!el || el.isConnected){
       el = document.createElement(box.dataset.mkind === 'v' ? 'video' : 'audio');
@@ -2496,6 +2534,8 @@ function hydrateMedia(root, prefix = ''){
       el.addEventListener('loadedmetadata', () => { el._ok = true; showMedia(el); });
       el.addEventListener('error', () => { el._fail = true; const b = el.closest('.media'); if(b) b.remove(); });
       el.src = box.dataset.msrc;
+      // Meta veri gecikirse (ağ sürücüsü) 16:9 yer tutucu kutu göster; bulunamayan dosya hızlı hata verir, hiç görünmez
+      setTimeout(() => { const b = !el._ok && !el._fail && el.closest('.media'); if(b && !b.classList.contains('ok')) b.classList.add('ok', 'load'); }, 400);
       if(!MEDIA_CACHE.has(key) || !MEDIA_CACHE.get(key).isConnected) MEDIA_CACHE.set(key, el);
     }
     if(el._fail){ box.remove(); return; }
@@ -2538,7 +2578,7 @@ function updateClick(){
   toast('Güncelleniyor — uygulama birkaç saniye içinde yeniden açılacak');
   API.update.install();
 }
-function settingsMenu(x, y){
+function settingsMenu(x, y, anchor){
   const st = UPD, line = st.phase==='ready' ? `Sürüm ${esc(st.latest)} kurulmaya hazır` : st.phase==='downloading' ? `Sürüm ${esc(st.latest)} indiriliyor · %${st.progress||0}` :
     st.phase==='checking' ? 'Denetleniyor…' : st.phase==='error' ? 'Son denetim başarısız' : st.phase==='disabled' ? 'Otomatik güncelleme: yalnızca Windows' : st.checkedAt ? 'Güncel' : '';
   menu(x, y, `<div class="mh">Claude Panel ${esc(APPV)}</div>
@@ -2546,15 +2586,31 @@ function settingsMenu(x, y){
     ${st.phase==='ready'?`<button data-m="updgo" style="color:var(--accent-text)">${ic('sync')}Yeniden başlat ve güncelle</button>`:''}
     <button data-m="updcheck">${ic('sync')}Güncellemeleri denetle</button>
     <button data-m="upddir">${ic('folder')}Güncelleme klasörü…</button>
+    ${updDirRow()}
     ${MIRROR && MIRROR.root?`<hr><button data-m="mirroropen" title="${esc(MIRROR.root)}">${ic('ext')}Diskteki kopyayı aç <span style="margin-left:auto;padding-left:12px;color:var(--faint);font-size:11px;max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" class="mono">${esc(MIRROR.root)}</span></button>`:''}
     <hr><button data-m="fontdlg">${ic('edit')}Yazı tipi…</button>
-    <button data-m="helpdlg">${ic('search')}Klavye kısayolları</button>`);
+    <button data-m="helpdlg">${ic('search')}Klavye kısayolları</button>
+    ${themeRows()}`, anchor);
+}
+// Ayarlar → Tema: dört seçenek (tema.js CHOICES); seçili olan ✓ ile işaretli. Seçim data-m="tema" ile işlenir.
+const LOOK_SW = {gece:'#070709', claude:'#262624', light:'#faf9f5', system:'linear-gradient(135deg,#faf9f5 50%,#070709 50%)'};
+function themeRows(){
+  const cur = Tema.current(WS && WS.prefs);
+  return `<hr><div class="mh">Tema</div>` + Tema.CHOICES.map(c => `<button data-m="tema" data-v="${c.id}"${cur===c.id?' data-cur':''}><span class="dot tema-sw" style="background:${LOOK_SW[c.id]}"></span>${esc(c.label)}${c.note?` <span style="color:var(--faint);font-size:11px">${esc(c.note)}</span>`:''}${cur===c.id?'<span style="margin-left:auto;padding-left:12px">✓</span>':''}</button>`).join('');
+}
+// Güncelleme klasörü: kullanıcı seçmediyse varsayılan NAS klasörü "(varsayılan)" etiketiyle seçili görünür; seçtiyse o klasör
+// ve "Varsayılana dön". Varsayılanı olmayan platformda (Mac) satır çıkmaz.
+let UPDDIR = null;
+function updDirRow(){
+  const d = UPDDIR; if(!d || !d.defaultDir || !d.dir) return '';
+  return `<div class="upd-dir" title="${esc(d.dir)}"><span class="upd-dir-ok">✓</span><span class="mono upd-dir-p">${esc(d.dir)}</span>${d.isDefault?'<span class="upd-dir-d">(varsayılan)</span>':''}</div>`
+    + (d.isDefault ? '' : `<button data-m="upddef">${ic('sync')}Varsayılana dön</button>`);
 }
 (async () => {
   try { APPV = (await API.info()).version; } catch {}
   if(API.mirror) try { MIRROR = await API.mirror.info(); } catch {}
   if(!API.update) return;
-  try { UPD = await API.update.state(); } catch {}
+  try { UPD = await API.update.state(); UPDDIR = UPD.dirInfo || null; } catch {}
   paintUpd();
   API.update.onState(st => { const was = UPD.phase; UPD = st; paintUpd(); if(st.phase==='ready' && was!=='ready') { toast(`Yeni sürüm ${st.latest} hazır — üst çubuktan yeniden başlat`); renderRail(); } });
 })();

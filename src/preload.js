@@ -12,6 +12,11 @@ contextBridge.exposeInMainWorld('api', {
       return () => ipcRenderer.removeListener('sessions:changed', h);
     },
   },
+  changes: { // oturumun değiştirdiği dosyalar, fark ve dosya bazında geri alma
+    list: id => ipcRenderer.invoke('changes:list', id),
+    diff: (id, p) => ipcRenderer.invoke('changes:diff', id, p),
+    revert: (id, p, opts) => ipcRenderer.invoke('changes:revert', id, p, opts),
+  },
   workspace: {
     load: () => ipcRenderer.invoke('workspace:load'),
     save: data => ipcRenderer.invoke('workspace:save', data),
@@ -22,6 +27,7 @@ contextBridge.exposeInMainWorld('api', {
     check: () => ipcRenderer.invoke('update:check'),
     install: () => ipcRenderer.invoke('update:install'),
     pickDir: () => ipcRenderer.invoke('update:pickDir'),
+    resetDir: () => ipcRenderer.invoke('update:resetDir'),
     onState: cb => { const h = (_e, st) => cb(st); ipcRenderer.on('update:state', h); return () => ipcRenderer.removeListener('update:state', h); },
   },
   mirror: {
@@ -37,6 +43,7 @@ contextBridge.exposeInMainWorld('api', {
     pickFiles: cwd => ipcRenderer.invoke('dialog:pickFiles', cwd),
     describeFiles: paths => ipcRenderer.invoke('fs:describeFiles', paths),
     recentMedia: dir => ipcRenderer.invoke('fs:recentMedia', dir),
+    saveAnnotated: (data, name) => ipcRenderer.invoke('img:saveAnnotated', data, name),
     pathForFile: file => { try { return webUtils.getPathForFile(file); } catch { return null; } },
   },
   claude: {
@@ -71,5 +78,6 @@ contextBridge.exposeInMainWorld('api', {
     dictate: () => ipcRenderer.invoke('app:dictate'),
   },
   platform: ((process.argv || []).find(a => a.startsWith('--cp-platform=')) || '').slice(14) || process.platform,
-  setTheme: dark => ipcRenderer.send('win:theme', !!dark),
+  home: ((process.argv || []).find(a => a.startsWith('--cp-home=')) || '').slice(10),   // "~" ile yazılan medya yollarını tekilleştirmek için
+  setTheme: (dark, look) => ipcRenderer.send('win:theme', !!dark, String(look || '')),
 });
