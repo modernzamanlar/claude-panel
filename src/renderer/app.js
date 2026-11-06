@@ -1329,6 +1329,7 @@ document.addEventListener('click', e => {
     R.answers[q.question] = qaB.dataset.multi ? (cur.includes(qaB.dataset.label) ? cur.filter(x => x !== qaB.dataset.label) : [...cur, qaB.dataset.label]) : [qaB.dataset.label];
     renderPanes(); return; }
   const at = t.closest('[data-attach]'); if(at){ pickAttachments(+at.dataset.attach); return; }
+  const an = t.closest('[data-annot]'); if(an){ openAnnotate(sess(an.dataset.sid), +an.dataset.annot); return; }
   const ua = t.closest('[data-unattach]'); if(ua){ const s = sess(ua.dataset.sid); s.attach.splice(+ua.dataset.unattach, 1); renderPanes(); return; }
   if(t.closest('[data-mcpcheck]')){ const s = sess(S.panes[S.active]); if(s) checkConnectors(s); return; }
   if(t.closest('[data-login]')){ API.claude.login(); toast('Terminal açıldı: girişi tarayıcıda tamamla, sonra "Tekrar kontrol et"'); let n = 0; const iv = setInterval(async () => { n++; const a = await checkAuth(); if(a.loggedIn || n > 40){ clearInterval(iv); if(a.loggedIn) toast('Giriş tamam — artık panelden yazabilirsin'); } }, 3000); return; }
@@ -2262,7 +2263,7 @@ window.addEventListener('focus', () => { paintBadge(); renderRail(); if(S.org) r
 /* ---------- Faz 3: dosya / görsel ekleme ---------- */
 function attachChips(s){
   const a = s.attach || []; if(!a.length) return '';
-  return `<div class="att">${a.map((x, k) => `<span class="att-c" title="${esc(x.path || x.name)}">${x.isImage ? `<img src="data:${x.media_type};base64,${x.data}" alt="">` : ic(MEDIA_VID.test(x.name) ? 'video' : MEDIA_AUD.test(x.name) ? 'music' : 'file')}<span>${esc(x.name)}</span><button data-unattach="${k}" data-sid="${s.id}">${ic('x')}</button></span>`).join('')}</div>`;
+  return `<div class="att">${a.map((x, k) => `<span class="att-c" title="${esc(x.path || x.name)}">${x.isImage ? `<img src="data:${x.media_type};base64,${x.data}" alt="" data-annot="${k}" data-sid="${s.id}">` : ic(MEDIA_VID.test(x.name) ? 'video' : MEDIA_AUD.test(x.name) ? 'music' : 'file')}<span>${esc(x.name)}</span>${x.isImage ? `<button data-annot="${k}" data-sid="${s.id}" title="Çiz" aria-label="Çiz">${ic('edit')}</button>` : ''}<button data-unattach="${k}" data-sid="${s.id}">${ic('x')}</button></span>`).join('')}</div>`;
 }
 function addAttachments(s, items){
   if(!s || !items || !items.length) return;
@@ -2273,6 +2274,11 @@ function addAttachments(s, items){
   const big = items.filter(i => !i.isImage && /\.(png|jpe?g|gif|webp)$/i.test(i.name));
   if(big.length) toast('5 MB üstü görseller dosya yolu olarak eklendi');
   renderPanes();
+}
+// Ekteki görselin üzerine çiz (annotate-ui.js): kaydedilince ek, yeni PNG dosyasıyla değişir; orijinale dokunulmaz
+function openAnnotate(s, k){
+  const it = s && s.attach && s.attach[k]; if(!it || !it.isImage || !window.annotUI) return;
+  annotUI.open(it, {toast, save: API.fs.saveAnnotated, done: nw => { const j = (s.attach || []).indexOf(it); if(j >= 0){ s.attach[j] = nw; renderPanes(); } else addAttachments(s, [nw]); }});
 }
 async function pickAttachments(i){ const s = sess(S.panes[i]); if(!s) return; addAttachments(s, await API.fs.pickFiles(s.cwd || s.project)); }
 document.addEventListener('dragover', e => { const c = e.target.closest && e.target.closest('.comp'); if(c && e.dataTransfer && [...e.dataTransfer.types].includes('Files')){ e.preventDefault(); c.classList.add('dropfile'); } });

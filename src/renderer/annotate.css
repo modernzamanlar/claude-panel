@@ -1,0 +1,36 @@
+/* Görsel üzerine çizim düzenleyicisi (annotate-ui.js) */
+.annot{position:fixed;inset:0;z-index:75;background:rgba(0,0,0,.72);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;padding:48px 32px 24px;-webkit-app-region:no-drag;user-select:none}
+.annot.busy{cursor:progress}
+.annot-stage{position:relative;flex:none;border-radius:6px;box-shadow:0 10px 40px rgba(0,0,0,.5);background:repeating-conic-gradient(#ccc 0 25%,#fff 0 50%) 0 0/16px 16px}
+.annot-cv{display:block;border-radius:6px;touch-action:none}
+.annot-txt{position:absolute;min-width:60px;width:auto;border:1px dashed rgba(255,255,255,.8);outline:none;background:rgba(0,0,0,.25);padding:0 3px;margin:0;font-family:Inter,"Segoe UI",system-ui,sans-serif;font-weight:600;line-height:1.2;border-radius:3px;field-sizing:content}
+.annot-name{position:absolute;top:14px;left:50%;transform:translateX(-50%);color:rgba(255,255,255,.75);font-size:12px;max-width:60%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+.annot-bar{flex:none;display:flex;align-items:center;gap:4px;padding:6px 8px;background:var(--panel);border:1px solid var(--line2);border-radius:12px;box-shadow:0 8px 30px rgba(0,0,0,.35);color:var(--text)}
+.annot-b{height:32px;min-width:32px;display:grid;place-items:center;border-radius:8px;color:var(--text)}
+.annot-b:hover{background:var(--hover)}
+.annot-b.on{background:var(--accent-soft);color:var(--accent-text)}
+.annot-b:disabled{opacity:.35;pointer-events:none}
+.annot-b svg,.annot-sh svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.annot-grp{display:inline-flex;align-items:center}
+.annot-grp .annot-b:first-child{border-radius:8px 0 0 8px}
+.annot-cr{min-width:18px;width:18px;border-radius:0 8px 8px 0;color:var(--muted)}
+.annot-cr svg{width:13px;height:13px}
+.annot-dot{display:block;width:16px;height:16px;border-radius:50%;box-shadow:0 0 0 1px rgba(0,0,0,.25) inset}
+.annot-ln{display:block;width:20px;background:var(--text);border-radius:3px}
+.annot-sep{width:1px;height:20px;background:var(--line2);margin:0 4px}
+.annot-save{height:32px;padding:0 14px;border-radius:8px;background:var(--hover);color:var(--text);font-size:13px;font-weight:500;margin-left:4px}
+.annot-save:hover{background:var(--accent);color:#fff}
+
+.annot-pop{position:fixed;z-index:76;background:var(--panel);border:1px solid var(--line2);border-radius:10px;box-shadow:0 8px 30px rgba(0,0,0,.35);padding:6px;display:flex;gap:4px;color:var(--text)}
+.annot-pop-size,.annot-pop-shape{flex-direction:column;min-width:120px}
+.annot-sw{width:28px;height:28px;display:grid;place-items:center;border-radius:7px}
+.annot-sw i{display:block;width:18px;height:18px;border-radius:50%;box-shadow:0 0 0 1px rgba(0,0,0,.25) inset}
+.annot-sw:hover,.annot-sz:hover,.annot-sh:hover{background:var(--hover)}
+.annot-sw.on{box-shadow:0 0 0 2px var(--accent) inset}
+.annot-sz,.annot-sh{display:flex;align-items:center;gap:10px;padding:6px 8px;border-radius:7px;font-size:12.5px;text-align:left}
+.annot-sz i{display:block;width:28px;background:var(--text);border-radius:3px}
+.annot-sz.on,.annot-sh.on{background:var(--accent-soft);color:var(--accent-text)}
+
+/* Ek çipindeki "Çiz" düğmesi ve tıklanabilir küçük resim */
+.att-c img{cursor:pointer}
