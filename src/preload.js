@@ -22,6 +22,7 @@ contextBridge.exposeInMainWorld('api', {
     check: () => ipcRenderer.invoke('update:check'),
     install: () => ipcRenderer.invoke('update:install'),
     pickDir: () => ipcRenderer.invoke('update:pickDir'),
+    resetDir: () => ipcRenderer.invoke('update:resetDir'),
     onState: cb => { const h = (_e, st) => cb(st); ipcRenderer.on('update:state', h); return () => ipcRenderer.removeListener('update:state', h); },
   },
   mirror: {
@@ -72,5 +73,5 @@ contextBridge.exposeInMainWorld('api', {
     dictate: () => ipcRenderer.invoke('app:dictate'),
   },
   platform: ((process.argv || []).find(a => a.startsWith('--cp-platform=')) || '').slice(14) || process.platform,
-  setTheme: dark => ipcRenderer.send('win:theme', !!dark),
+  setTheme: (dark, look) => ipcRenderer.send('win:theme', !!dark, String(look || '')),
 });

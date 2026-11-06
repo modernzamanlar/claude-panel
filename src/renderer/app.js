@@ -381,7 +381,7 @@ function gDraw(){
   const cv = $('#gvCanvas'); if(!cv) return; const c = cv.getContext('2d'); const {w, h, dpr} = G; const k = G.cam.k; const P = G.pos;
   const ACC = '#d97757', WARN = '#e0a43a', TXT = 'rgba(236,233,225,.88)';
   c.setTransform(dpr,0,0,dpr,0,0);
-  const bg = c.createRadialGradient(w/2, h/2, 0, w/2, h/2, Math.max(w,h)*.7); bg.addColorStop(0,'#211f1c'); bg.addColorStop(1,'#121110');
+  const bg = c.createRadialGradient(w/2, h/2, 0, w/2, h/2, Math.max(w,h)*.7); const gece = document.documentElement.dataset.look === 'gece'; bg.addColorStop(0, gece ? '#121826' : '#211f1c'); bg.addColorStop(1, gece ? '#070709' : '#121110');
   c.fillStyle = bg; c.fillRect(0,0,w,h);
   c.save(); c.translate(w/2 + G.cam.x, h/2 + G.cam.y); c.scale(k,k);
   const focus = G.hover || (G.sel ? G.byId[G.sel] : null);
@@ -1187,10 +1187,12 @@ function folderMenu(fid, x, y){
 document.addEventListener('click', e => {
   const t = e.target;
   const m = t.closest('.menu [data-m]');
+  if(m && m.dataset.m==='tema'){ closeMenu(); WS.prefs = Tema.choose(WS.prefs, m.dataset.v); applyTheme(WS.prefs); persist(); return; }
+  if(m && m.dataset.m==='upddef'){ closeMenu(); API.update.resetDir().then(st => { UPD = st; if(st.dirInfo) UPDDIR = st.dirInfo; paintUpd(); updToast(st, true); }); return; }
   if(m && /^(updcheck|upddir|updgo|mirroropen|helpdlg|fontdlg)$/.test(m.dataset.m)){ const k = m.dataset.m; closeMenu();
     if(k==='fontdlg') openFonts();
     if(k==='updcheck') updCheck();
-    if(k==='upddir') API.update.pickDir().then(st => { if(st){ UPD = st; paintUpd(); updToast(st, true); } });
+    if(k==='upddir') API.update.pickDir().then(st => { if(st){ UPD = st; if(st.dirInfo) UPDDIR = st.dirInfo; paintUpd(); updToast(st, true); } });
     if(k==='updgo') updateClick();
     if(k==='mirroropen') API.mirror.open().then(ok => ok || toast('Klasör açılamadı'));
     if(k==='helpdlg') showHelp();
@@ -1366,8 +1368,7 @@ document.addEventListener('click', e => {
   if(t.closest('#btnUpd')){ updateClick(); return; }
   if(t.closest('#btnSync')){ syncNow(); return; }
   if(t.closest('#btnTheme')){
-    const next = isDarkTheme() ? 'light' : 'dark';
-    applyTheme(next); WS.prefs = {...(WS.prefs||{}), theme:next}; persist(); return;
+    WS.prefs = Tema.toggle(WS.prefs, isDarkTheme()); applyTheme(WS.prefs); persist(); return;
   }
   const pane = t.closest('.pane'); if(pane){ const i=+pane.dataset.pane; if(i!==S.active){ S.active=i; document.querySelectorAll('.pane').forEach(p=>p.classList.toggle('active', +p.dataset.pane===i)); renderRail(); renderInfo(); } }
 });
@@ -1745,17 +1746,21 @@ function onChanged(payload){
 // Tema: data-theme yoksa sistem temasını izler (CSS prefers-color-scheme). Koyu mu, rengine bakarak değil buradan anlaşılır
 // (eskiden --bg rengiyle karşılaştırılıyordu; koyu temanın rengi değişince düğme hep "koyu"ya basıyordu).
 const isDarkTheme = () => { const t = document.documentElement.dataset.theme; return t ? t === 'dark' : matchMedia('(prefers-color-scheme: dark)').matches; };
-function applyTheme(t){
-  if(t === 'dark' || t === 'light') document.documentElement.dataset.theme = t; else delete document.documentElement.dataset.theme;
-  try { API.setTheme(isDarkTheme()); } catch {}
+// prefs (WS.prefs): theme + palette → data-theme (açık/koyu) ve data-look (gece | claude | light; renk takımı, tema.css). Ayrıntı ve göç: tema.js
+function applyTheme(prefs){
+  const r = Tema.resolve(prefs, matchMedia('(prefers-color-scheme: dark)').matches), el = document.documentElement;
+  if(r.attr) el.dataset.theme = r.attr; else delete el.dataset.theme;
+  el.dataset.look = r.look;
+  try { API.setTheme(isDarkTheme(), r.look); } catch {}
 }
-matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => { if(!document.documentElement.dataset.theme) try { API.setTheme(isDarkTheme()); } catch {} });
+applyTheme(null); // kayıt yüklenene kadar varsayılan görünüm (eski koyu tema bir an görünmesin)
+matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => { if(!document.documentElement.dataset.theme) applyTheme(WS && WS.prefs); });
 
 async function boot(){
   WS = await API.workspace.load();
   // Eski sürümler hiç seçilmemiş yazı tipini de boş ('Sistem') olarak kaydediyordu: bilerek seçilmemişse yeni varsayılan geçerli
   const pf = WS.prefs && WS.prefs.fonts; if(pf && (WS.prefs.fontsV === 2 || Object.values(pf).some(Boolean))) Object.assign(FONT, pf); applyFonts();
-  applyTheme((WS.prefs && WS.prefs.theme) || null);
+  applyTheme(WS.prefs);
   if(WS.prefs && SORTS.some(([k]) => k === WS.prefs.sort)) FX.sort = WS.prefs.sort;
   if(WS.prefs && WS.prefs.usage && WS.prefs.usage.w) USAGE = WS.prefs.usage;
   S.side = !(WS.prefs && WS.prefs.side === false); // Sohbetler penceresinin kenar çubuğu varsayılan açık; kullanıcı kapatırsa öyle kalır
@@ -2392,7 +2397,7 @@ if(!IS_MAC){
   new MutationObserver(ms => { for(const m of ms){ if(m.type === 'characterData') walk(m.target); else if(m.type === 'attributes') walk(m.target); else m.addedNodes.forEach(walk); } })
     .observe(document.body, { subtree:true, childList:true, characterData:true, attributes:true, attributeFilter:['title'] });
   // Açılışta pencere düğmelerini temaya göre renklendir
-  try { API.setTheme(isDarkTheme()); } catch {}
+  try { API.setTheme(isDarkTheme(), document.documentElement.dataset.look); } catch {}
 }
 
 
@@ -2552,15 +2557,31 @@ function settingsMenu(x, y){
     ${st.phase==='ready'?`<button data-m="updgo" style="color:var(--accent-text)">${ic('sync')}Yeniden başlat ve güncelle</button>`:''}
     <button data-m="updcheck">${ic('sync')}Güncellemeleri denetle</button>
     <button data-m="upddir">${ic('folder')}Güncelleme klasörü…</button>
+    ${updDirRow()}
     ${MIRROR && MIRROR.root?`<hr><button data-m="mirroropen" title="${esc(MIRROR.root)}">${ic('ext')}Diskteki kopyayı aç <span style="margin-left:auto;padding-left:12px;color:var(--faint);font-size:11px;max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" class="mono">${esc(MIRROR.root)}</span></button>`:''}
     <hr><button data-m="fontdlg">${ic('edit')}Yazı tipi…</button>
-    <button data-m="helpdlg">${ic('search')}Klavye kısayolları</button>`);
+    <button data-m="helpdlg">${ic('search')}Klavye kısayolları</button>
+    ${themeRows()}`);
+}
+// Ayarlar → Tema: dört seçenek (tema.js CHOICES); seçili olan ✓ ile işaretli. Seçim data-m="tema" ile işlenir.
+const LOOK_SW = {gece:'#070709', claude:'#262624', light:'#faf9f5', system:'linear-gradient(135deg,#faf9f5 50%,#070709 50%)'};
+function themeRows(){
+  const cur = Tema.current(WS && WS.prefs);
+  return `<hr><div class="mh">Tema</div>` + Tema.CHOICES.map(c => `<button data-m="tema" data-v="${c.id}"${cur===c.id?' data-cur':''}><span class="dot tema-sw" style="background:${LOOK_SW[c.id]}"></span>${esc(c.label)}${c.note?` <span style="color:var(--faint);font-size:11px">${esc(c.note)}</span>`:''}${cur===c.id?'<span style="margin-left:auto;padding-left:12px">✓</span>':''}</button>`).join('');
+}
+// Güncelleme klasörü: kullanıcı seçmediyse varsayılan NAS klasörü "(varsayılan)" etiketiyle seçili görünür; seçtiyse o klasör
+// ve "Varsayılana dön". Varsayılanı olmayan platformda (Mac) satır çıkmaz.
+let UPDDIR = null;
+function updDirRow(){
+  const d = UPDDIR; if(!d || !d.defaultDir || !d.dir) return '';
+  return `<div class="upd-dir" title="${esc(d.dir)}"><span class="upd-dir-ok">✓</span><span class="mono upd-dir-p">${esc(d.dir)}</span>${d.isDefault?'<span class="upd-dir-d">(varsayılan)</span>':''}</div>`
+    + (d.isDefault ? '' : `<button data-m="upddef">${ic('sync')}Varsayılana dön</button>`);
 }
 (async () => {
   try { APPV = (await API.info()).version; } catch {}
   if(API.mirror) try { MIRROR = await API.mirror.info(); } catch {}
   if(!API.update) return;
-  try { UPD = await API.update.state(); } catch {}
+  try { UPD = await API.update.state(); UPDDIR = UPD.dirInfo || null; } catch {}
   paintUpd();
   API.update.onState(st => { const was = UPD.phase; UPD = st; paintUpd(); if(st.phase==='ready' && was!=='ready') { toast(`Yeni sürüm ${st.latest} hazır — üst çubuktan yeniden başlat`); renderRail(); } });
 })();
