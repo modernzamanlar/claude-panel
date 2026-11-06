@@ -210,9 +210,9 @@ function createScreenControl(deps) {
     if (!auth || !safeEq(auth[1], token)) return end(401, 'anahtar');
     if (req.method !== 'POST') { res.setHeader('Allow', 'POST'); return end(405, 'yalnız POST'); }
     let size = 0; const chunks = [];
-    req.on('data', c => { size += c.length; if (size > MAX_BODY) { end(413, 'büyük'); req.destroy(); } else chunks.push(c); });
+    req.on('data', c => { size += c.length; if (size <= MAX_BODY) chunks.push(c); }); // fazlası okunup atılır (yalnız anahtarlı istemci buraya gelir)
     req.on('end', async () => {
-      if (size > MAX_BODY) return;
+      if (size > MAX_BODY) return end(413, 'büyük');
       let body; try { body = JSON.parse(Buffer.concat(chunks).toString('utf8')); } catch { return end(400, JSON.stringify({ jsonrpc: '2.0', id: null, error: { code: -32700, message: 'JSON bozuk' } }), 'application/json'); }
       const batch = Array.isArray(body);
       const out = (await Promise.all((batch ? body : [body]).map(x => rpc(r, x)))).filter(Boolean);
