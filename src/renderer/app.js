@@ -610,7 +610,7 @@ function backendSearch(){
 }
 const trNorm = s => s.toLocaleLowerCase('tr').replace(/[çğıöşüâîû]/g, c => ({'ç':'c','ğ':'g','ı':'i','ö':'o','ş':'s','ü':'u','â':'a','î':'i','û':'u'})[c]);
 function textOf(s){
-  const msg = s.msgs.map(m => m.r==='u' ? m.t : m.b.map(b => b.t==='text' ? b.v.replace(/<[^>]+>/g,'') : b.a+' '+b.o).join(' ')).join(' \n ');
+  const msg = s.msgs.map(m => m.r==='u' ? m.t : m.r==='c' ? '' : m.b.map(b => b.t==='text' ? b.v.replace(/<[^>]+>/g,'') : b.a+' '+b.o).join(' ')).join(' \n ');
   return (msg || PROMPTS[s.id] || '') + ' ' + s.outputs.join(' ');
 }
 // Vurgulama ve alıntı: Türkçe karakter duyarsız, her kelime ayrı ayrı (normalleştirme karakter karakter, konumlar korunur)
