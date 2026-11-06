@@ -48,7 +48,11 @@ const mirror = createMirror({
 // Kendi kendini güncelleme (Windows): güncelleme klasöründeki guncelleme.json'a bakar
 const updater = createUpdater({
   app, settingsFile: path.join(workspace.DIR, 'settings.json'),
+  // selftest: CLAUDE_PANEL_UI_PLATFORM=darwin Mac güncelleme akışını da seçer (yalnızca --selftest ile)
+  platform: (SELFTEST && process.env.CLAUDE_PANEL_UI_PLATFORM) || process.platform,
   onState: st => { if (win && !win.isDestroyed()) win.webContents.send('update:state', st); },
+  // Mac yedek yolu (otomatik değiştirme olmadı): sürükleyip bırakma yönergesi
+  notify: msg => { if (win && !win.isDestroyed()) dialog.showMessageBox(win, { type: 'warning', title: 'Claude Panel', message: 'Güncelleme otomatik kurulamadı', detail: msg }).catch(() => {}); },
 });
 ipcMain.handle('update:state', () => ({ ...updater.state, sources: updater.sources(), dir: updater.getDir() }));
 ipcMain.handle('update:check', () => updater.check({ manual: true }));

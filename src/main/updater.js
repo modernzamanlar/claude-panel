@@ -1,4 +1,4 @@
-// Kendi kendini güncelleme (Windows). Yeni sürümler bir "güncelleme klasörüne" konur (varsayılan: ofis NAS'ındaki
+// Kendi kendini güncelleme (Windows; Mac: aynı manifestteki imzalı "mac" girdisi, bkz. macupdate.js). Yeni sürümler bir "güncelleme klasörüne" konur (varsayılan: ofis NAS'ındaki
 // Claude App\Exe). Klasörde guncelleme.json bulunur: { version, file, sha512, size, notes, date, imza }.
 // Akış: açılıştan kısa süre sonra ve 30 dakikada bir denetle → daha yeni sürüm varsa kurulum dosyasını arka planda
 // %TEMP%'e kopyala ve SHA-512 ile doğrula → arayüze "hazır" de → kullanıcı onaylayınca kurulumu sessiz (/S) başlat,
@@ -8,7 +8,11 @@ const path = require('path');
 const os = require('os');
 const crypto = require('crypto');
 const { pipeline } = require('stream/promises');
-const { spawn } = require('child_process');
+const { spawn, execFile } = require('child_process');
+const { promisify } = require('util');
+const mac = require('./macupdate');
+// Mac: guncelleme.json'da ayrıca imzalı bir "mac" girdisi bulunur (zip + dmg); üst düzey alanlar Windows'undur
+// (sahadaki 0.2.8 Windows istemcileri yalnızca onları okur, mac girdisini görmezden gelir).
 
 const MANIFEST = 'guncelleme.json';
 // Güncellemeler Ed25519 ile imzalanır. Özel anahtar yalnızca yayın yapan Mac'te (~/.claude-panel-yayin) durur;
@@ -44,10 +48,17 @@ function sha512(file) {
 
 function createUpdater({
   app, settingsFile, onState = () => {}, platform = process.platform,
-  enabled = platform === 'win32' || !!process.env.CLAUDE_PANEL_UPDATES, publicKey = PUBLIC_KEY,
+  enabled = platform === 'win32' || (platform === 'darwin' && !!app.isPackaged) || !!process.env.CLAUDE_PANEL_UPDATES, publicKey = PUBLIC_KEY,
   downloadDir = path.join(os.tmpdir(), 'claude-panel-guncelleme'), spawn: spawnFn = spawn,
+  // Mac'e özel: execFile (ditto), uygulamanın yürütülebilir yolu, ev klasörü, çalışma kökü, erişim denetimi, kullanıcıya bildirim
+  execFile: execFileFn = promisify(execFile), exePath = () => app.getPath('exe'), home = os.homedir(), workRoot = os.tmpdir(),
+  access = fs.accessSync, notify = () => {}, pid = process.pid,
+  defaultSources = platform === 'win32' ? DEFAULT_SOURCES : platform === 'darwin' ? mac.DEFAULT_SOURCES_MAC : [],
 }) {
-  const defaults = platform === 'win32' ? DEFAULT_SOURCES : [];
+  const IS_MAC = platform === 'darwin';
+  const defaults = defaultSources;
+  const entryOf = m => (IS_MAC ? m && m.mac : m);           // bu platformun girdisi
+  const logDir = path.dirname(settingsFile);
   let state = { phase: 'idle', current: app.getVersion() }; // idle|checking|none|downloading|ready|error|disabled
   let busy = null, timer = null;
   const set = s => { state = { ...state, ...s, current: app.getVersion() }; onState(state); };
@@ -60,7 +71,7 @@ function createUpdater({
     const tried = [];
     for (const dir of sources()) {
       try {
-        const m = JSON.parse(await fs.promises.readFile(path.join(dir, MANIFEST), 'utf8'));
+        const m = entryOf(JSON.parse(await fs.promises.readFile(path.join(dir, MANIFEST), 'utf8')));
         if (m && m.version && m.file) return { dir, m };
         tried.push(dir + ' (geçersiz)');
       } catch (e) { tried.push(dir + ' (' + (e.code || e.message) + ')'); }
@@ -68,21 +79,30 @@ function createUpdater({
     const err = new Error('Güncelleme klasörüne ulaşılamadı'); err.tried = tried; throw err;
   }
 
-  async function download(dir, m) {
-    const dst = path.join(downloadDir, `Claude Panel Setup ${m.version}.exe`);
+  // Kaynaktaki dosyayı downloadDir/<name>'e kopyala ve doğrula. İlerleme: (önceki + bu) / toplam
+  async function fetch(dir, file, name, size, hash, before = 0, total = size) {
+    const dst = path.join(downloadDir, name);
     fs.mkdirSync(downloadDir, { recursive: true });
     let ok = false;
-    try { ok = fs.statSync(dst).size === m.size && await sha512(dst) === m.sha512; } catch {} // önceki indirme geçerliyse yeniden kopyalama
+    try { ok = fs.statSync(dst).size === size && await sha512(dst) === hash; } catch {} // önceki indirme geçerliyse yeniden kopyalama
     if (!ok) {
-      const tmp = dst + '.part', r = fs.createReadStream(path.join(dir, m.file));
-      let got = 0, last = 0;
-      r.on('data', d => { got += d.length; const p = Math.floor(got / m.size * 100); if (p !== last) { last = p; set({ progress: p }); } });
+      const tmp = dst + '.part', r = fs.createReadStream(path.join(dir, file));
+      let got = 0, last = Math.floor(before / total * 100);
+      r.on('data', d => { got += d.length; const p = Math.floor((before + got) / total * 100); if (p !== last) { last = p; set({ progress: p }); } });
       await pipeline(r, fs.createWriteStream(tmp));
-      if (fs.statSync(tmp).size !== m.size) throw new Error('İndirilen dosyanın boyutu tutmuyor');
-      if (await sha512(tmp) !== m.sha512) throw new Error('İndirilen dosya doğrulanamadı (SHA-512)');
+      if (fs.statSync(tmp).size !== size) throw new Error('İndirilen dosyanın boyutu tutmuyor');
+      if (await sha512(tmp) !== hash) throw new Error('İndirilen dosya doğrulanamadı (SHA-512)');
       fs.renameSync(tmp, dst);
     }
     return dst;
+  }
+  const download = (dir, m) => fetch(dir, m.file, `Claude Panel Setup ${m.version}.exe`, m.size, m.sha512);
+  // Mac: zip (güncelleme) + dmg (yedek yol: elle sürükleme). Adlar imzalı girdiden gelir ve verifyMacEntry'de denetlenir.
+  async function downloadMac(dir, m) {
+    const total = m.size + m.dmgSize;
+    const file = await fetch(dir, m.file, m.file, m.size, m.sha512, 0, total);
+    const dmg = await fetch(dir, m.dmg, m.dmg, m.dmgSize, m.dmgSha512, m.size, total);
+    return { file, sha512: m.sha512, dmg, dmgSha512: m.dmgSha512 };
   }
 
   async function check({ manual = false } = {}) {
@@ -98,10 +118,10 @@ function createUpdater({
         if (cmpVer(m.version, app.getVersion()) <= 0) set({ phase: 'none', latest: m.version, source: dir, checkedAt: Date.now() });
         else if (keepReady() && cmpVer(m.version, prev.latest) <= 0) set({ checkedAt: Date.now() });
         else {
-          if (!verifyManifest(m, publicKey)) throw new Error(`Sürüm ${m.version} imzası doğrulanamadı — güncelleme reddedildi`);
+          if (!(IS_MAC ? mac.verifyMacEntry(m, publicKey) : verifyManifest(m, publicKey))) throw new Error(`Sürüm ${m.version} imzası doğrulanamadı — güncelleme reddedildi`);
           set({ phase: 'downloading', latest: m.version, notes: m.notes || '', source: dir, progress: 0 });
-          const file = await download(dir, m);
-          set({ phase: 'ready', file, sha512: m.sha512, progress: 100 });
+          if (IS_MAC) set({ phase: 'ready', ...await downloadMac(dir, m), guide: null, progress: 100 });
+          else set({ phase: 'ready', file: await download(dir, m), sha512: m.sha512, progress: 100 });
         }
       } catch (e) {
         if (keepReady()) set({ ...prev, checkedAt: Date.now() }); // hazır olan geçerli kalır
@@ -114,6 +134,7 @@ function createUpdater({
 
   /** Kurulumu sessiz başlat ve uygulamayı kapat. beforeQuit: kayıtları diske yazmak için (eşzamanlı) */
   function install(beforeQuit) {
+    if (IS_MAC) return installMac(beforeQuit);
     if (state.phase !== 'ready') return false;
     // kurmadan hemen önce dosyayı yeniden doğrula (indirme ile kurma arasında değiştirilmiş ya da silinmiş olmasın)
     let h = null;
@@ -132,8 +153,58 @@ function createUpdater({
     return true;
   }
 
+  // Mac yedek yolu: nedeni günlüğe ve kullanıcıya yaz, doğrulanmış DMG'yi aç (sürükleyip bırakma)
+  function manualFallback(reason, dmg) {
+    const where = dmg ? '' : ` DMG doğrulanamadı; güncelleme klasöründen (${state.source || 'NAS Claude App/Exe'}) elle açın.`;
+    mac.appendLog(logDir, 'HATA: ' + reason);
+    console.warn('mac güncelleme:', reason);
+    if (dmg) { try { const c = spawnFn('open', [dmg], { detached: true, stdio: 'ignore' }); c.once('error', () => {}); c.unref(); } catch {} }
+    const guide = mac.GUIDE + where;
+    set({ phase: 'error', error: 'Güncelleme otomatik kurulamadı: ' + reason, guide });
+    notify(`${guide}\n\nNeden: ${reason}`);
+    return false;
+  }
+  let installing = false;
+  async function installMac(beforeQuit) {
+    if (state.phase !== 'ready' || installing) return false;
+    installing = true;
+    try { return await installMacNow(beforeQuit); } finally { installing = false; }
+  }
+  async function installMacNow(beforeQuit) {
+    const st = state;
+    // kurmadan hemen önce paketleri yeniden doğrula (SHA-512 zorunlu: değişmiş ya da silinmiş paket kurulmaz)
+    if (await sha512(st.file).catch(() => null) !== st.sha512) {
+      set({ phase: 'error', error: 'Güncelleme paketi değişmiş ya da silinmiş — yeniden indirilecek' });
+      try { fs.unlinkSync(st.file); } catch {}
+      return false;
+    }
+    const dmg = await sha512(st.dmg).catch(() => null) === st.dmgSha512 ? st.dmg : null;
+    const bundle = mac.bundleRoot(exePath());
+    const why = mac.preflight(bundle, { home, access });
+    if (why) return manualFallback(why, dmg);
+    let job = null;
+    try {
+      job = mac.writeScript(workRoot);
+      job.newApp = await mac.extractApp(st.file, job.work, execFileFn);
+    } catch (e) {
+      if (job) try { fs.rmSync(job.work, { recursive: true, force: true }); } catch {}
+      return manualFallback('Paket açılamadı: ' + e.message, dmg);
+    }
+    fs.mkdirSync(logDir, { recursive: true });          // betik günlüğü buraya ekler (exec >>"$LOG")
+    mac.appendLog(logDir, `güncelleme ${st.current} → ${st.latest}: ${bundle}`);
+    const args = mac.scriptArgs({ pid, bundle, newApp: job.newApp, dmg, resultFile: path.join(logDir, mac.RESULT_FILE), logFile: path.join(logDir, mac.LOG_FILE) });
+    const child = spawnFn('/bin/sh', [job.script, ...args], { detached: true, stdio: 'ignore' });
+    child.once('error', e => manualFallback('Güncelleme betiği başlatılamadı: ' + e.message, dmg));
+    child.once('spawn', () => { try { if (beforeQuit) beforeQuit(); } catch {} setTimeout(() => app.quit(), 300); });
+    child.unref();
+    return true;
+  }
+
   function start() {
     if (!enabled) { set({ phase: 'disabled' }); return; }
+    // Mac: önceki güncelleme betiği başarısız olduysa nedenini göster (betik eski sürümü geri koyup DMG'yi açmıştır)
+    const failed = IS_MAC ? mac.takeResult(logDir) : null;
+    if (failed) { mac.appendLog(logDir, 'açılışta bildirildi: ' + failed); set({ phase: 'error', error: 'Güncelleme otomatik kurulamadı: ' + failed, guide: mac.GUIDE }); notify(`${mac.GUIDE}\n\nNeden: ${failed}`); }
     setTimeout(() => check(), 15 * 1000);
     timer = setInterval(() => check(), 30 * 60 * 1000);
   }
@@ -146,4 +217,4 @@ function createUpdater({
   };
 }
 
-module.exports = { createUpdater, cmpVer, sha512, verifyManifest, signManifest, MANIFEST, DEFAULT_SOURCES };
+module.exports = { createUpdater, cmpVer, sha512, verifyManifest, signManifest, MANIFEST, DEFAULT_SOURCES, PUBLIC_KEY, DEFAULT_SOURCES_MAC: mac.DEFAULT_SOURCES_MAC };
